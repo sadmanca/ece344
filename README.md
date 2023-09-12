@@ -1,7 +1,7 @@
 - [2023-09-07 | 1. Why Operating Systems](#2023-09-07--1-why-operating-systems)
   - [Core Operating Systems Concepts:](#core-operating-systems-concepts)
   - [Code example](#code-example)
-  - [1.1. course Topics](#11-course-topics)
+- [2023-09-18 | 2. Kernels](#2023-09-18--2-kernels)
 - [2. Intro to C++](#2-intro-to-c)
   - [2.1. Types](#21-types)
 
@@ -82,7 +82,17 @@ Source: https://laforge.eecg.utoronto.ca/ece344/2023-fall/student/materials/-/bl
 
 
 
-## 1.1. course Topics
+
+
+
+
+
+
+
+
+
+
+# 2023-09-18 | 2. Kernels
 
 C
 - Pointers
@@ -136,7 +146,6 @@ Problem Solving
 
 <!--------------------------------{.gray}------------------------------>
 <div style="page-break-after: always;"></div>
-
 
 # 2. Intro to C++
 ## 2.1. Types
