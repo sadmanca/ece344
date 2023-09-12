@@ -1,4 +1,5 @@
-- [2023-09-07 1. Why Operating Systems](#2023-09-07-1-why-operating-systems)
+- [2023-09-07 | 1. Why Operating Systems](#2023-09-07--1-why-operating-systems)
+  - [Core Operating Systems Concepts:](#core-operating-systems-concepts)
   - [Code example](#code-example)
   - [1.1. course Topics](#11-course-topics)
 - [2. Intro to C++](#2-intro-to-c)
@@ -23,26 +24,34 @@
 
 <div style="page-break-after: always;"></div>
 
-# 2023-09-07 1. Why Operating Systems
+# 2023-09-07 | 1. Why Operating Systems
+
 Pre-requisites:
 - C programming and debugging
 - Converting between bianry, hex, decimal
 - Little-endian, big-endian
 - Byte-addressable memory, memory address ala pointers
 
-3 core operating systems concepts:
-1. virtualization -- share one resource by mimicking multiple independent copies
-2. concurreny -- handle multiple things happening at the same time
-3. persistence -- retain data consistency even w/o power
+---
 
-os abstractions:
-- program -- a file containing all instructions & data required to run
-- process -- an instance of running a program
+## Core Operating Systems Concepts:
+1. Virtualization -- share one resource by mimicking multiple independent copies
+2. Concurrency -- handle multiple things happening at the same time
+3. Persistence -- retain data consistency even w/o power
 
-basic requiremnts for a process
-- virtual memory/registers
-  - stack
-  - heap
+---
+
+
+OS Abstractions:
+- Program -- a file containing all instructions & data required to run
+- Process -- an instance of running a program
+
+---
+
+Basic Requiremnts For A Process:
+- Virtual Memory/Registers
+  - Stack
+  - Heap
     - process assumes it has access to all physical memory in the computer; actual memory management done by os
     - registers are independent from each other
 
