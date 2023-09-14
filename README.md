@@ -349,12 +349,12 @@ graph TB
 
 ```mermaid
 graph LR
-	1["util.o"] ===> |"SHARED LINKAGE"| 2("lib.a")
+	1["util.o"] ===> |"SHARED LINKAGE"| 2("lib.so")
 	4["foo.o"] ==> 2
 	5["bar.o"] ==> 2
 
-  6["main.o"] ---|"Linkage"| 7("executable") 
-	2 --- |"Linkage"| 7
+  6["main.o"] --> |"Linkage"| 7("executable") 
+	2 -..-> |"LINKED AT RUNTIME"| 7
 ```
 
 #### 3.2.3.2. `>>> ldd <EXE>`
@@ -367,8 +367,6 @@ Shows which dynamic libraries an executable uses.
 | Prevents reusing libraries (result in many duplicates) {.lr} | Library changes/bugs can break applications {.lr}      |
 | Updates to static library requires recompilation {.lr}       | Dynamic libraries can allow for easier debugging {.lg} |
 
-\*
-
 ### 3.3.1. HOW Dynamic Libraries Can Break Executables
 Dynamic library `struct`s are laid out in memory with fields mathching the declaration order (see code below); changes in the order of lines can result in changes to the return values of ABI functions (e.g. `get_x(struct ...)`, `get_y(struct ...)` as below).
 
@@ -379,14 +377,14 @@ _e.g._
 ```c
 // v1
 struct point {
-  int x; // compiler ==> array[0]->x
-  int y; // compiler ==> array[1]->y
+  int x; // compiler ==> x->array[0]
+  int y; // compiler ==> y->array[1]
 }
 
 // v2
 struct point {
-  int y; // compiler ==> array[0]->y | SWITCHED!
-  int x; // compiler ==> array[1]->x | SWITCHED!
+  int y; // compiler ==> x->array[1] | SWITCHED!
+  int x; // compiler ==> y->array[0] | SWITCHED!
 }
 ```
 
