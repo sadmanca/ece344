@@ -10,7 +10,7 @@
 		"scope": "markdown",
 		"prefix": "code",
 		"body": [
-			"```cpp",
+			"```c",
 			"$code",
 			"```",
 		],
@@ -20,7 +20,7 @@
 		"scope": "markdown",
 		"prefix": "c",
 		"body": [
-			"```cpp",
+			"```c",
 			"$code",
 			"```",
 		],

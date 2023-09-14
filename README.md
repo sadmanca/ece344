@@ -2,6 +2,12 @@
   - [Core Operating Systems Concepts:](#core-operating-systems-concepts)
   - [Code example](#code-example)
 - [2023-09-18 | 2. Kernels](#2023-09-18--2-kernels)
+  - [instruction set architecture (ISA)](#instruction-set-architecture-isa)
+  - [Inter-Process Communication (IPC)](#inter-process-communication-ipc)
+  - [OS system calls](#os-system-calls)
+    - [`write()`](#write)
+    - [`exit_group()`](#exit_group)
+    - [Standard File Descriptors](#standard-file-descriptors)
 - [2. Intro to C++](#2-intro-to-c)
   - [2.1. Types](#21-types)
 
@@ -94,43 +100,45 @@ Source: https://laforge.eecg.utoronto.ca/ece344/2023-fall/student/materials/-/bl
 
 # 2023-09-18 | 2. Kernels
 
-C
-- Pointers
-- Compilation
+## instruction set architecture (ISA)
+refers to machine code that a CPU understands. 3 main ISAs in use today:
+- `x86-64 / amd64` - desktops
+- `aarch64 / arm64` - mobile
+- `riscv / rv64gc` - open source ARM alternative
 
-C++ OO Features
-- Class & Objects
-- Inheritance
-- Templates
+## Inter-Process Communication (IPC)
+- IPC -- mechanism that allows OS to transfer data between processes
 
-$$
-\left( \sum_{k=1}^n a_k b_k \right)^2 \leq \left( \sum_{k=1}^n a_k^2 \right) \left( \sum_{k=1}^n b_k^2 \right)
-$$
+- File descriptor -- **not just a file**; a resource that users can either read bytes from or write bytes to; is identified by an index stored in a process
+  - e.g. .txt file, ANY file, **terminal**
 
-```math
-\left( \sum_{k=1}^n a_k b_k \right)^2 \leq \left( \sum_{k=1}^n a_k^2 \right) \left( \sum_{k=1}^n b_k^2 \right)
+## OS system calls
+C functions that operate on/using the OS
+
+### `write()`
+Writes bytes from byte array to file descriptor
+```c
+ssize_t write(int fd, const void *buf, size_t count)
+// fd - file descriptor
+// buf - address of start of byte array (i.e. BUFFER)
+// count - number of bytes to write from buffer
 ```
 
-```mermaid
-flowchart LR
-
-%% Colors %%
-
-classDef blue fill:#66deff,stroke:#000,color:#000
-classDef green fill:#6ad98b,stroke:#000,color:#000
-
-%% GENERATION 4 %%
-Fa1(Grandfather):::green --> G3(Gen 3):::blue
-Mo1(Grandmother):::green --- G3
+### `exit_group()`
+Exits the current process and sets an exit status code (0 status code = no errors, is why `main()` has `return 0`)
+```c
+void exit_group(int status)
+// status - exit status code (0-255)
 ```
 
-Problem Solving
-- Data Structures: Linked List, Trees, Graphs, Etc.
-- Recursion
-- Exception Handling
-- Complexity Analysis
+### Standard File Descriptors
+- `0` / `stdin` -- standard input (read)
+- `1` / `stdout` -- standard output (write)
+- `2` / `stderr` -- standard error (**write**{.b})
 
-<!--------------------------------{.gray}------------------------------>
+
+
+------------------------------{.gray}------------------------------>
 
 
 
