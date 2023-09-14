@@ -133,7 +133,7 @@
             "decorations": [
                 {
                     "isWholeLine": "true",
-                    "color": "rgb(26, 26, 26)"
+                    "color": "rgb(0,0,0)"
                 }
             ]
         },
@@ -212,4 +212,6 @@
         "limits": "cpp",
         "string": "cpp"
     },
+    "task.quickOpen.detail": false,
+    "task.quickOpen.skip": false,
 }
