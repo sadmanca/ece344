@@ -1,0 +1,17 @@
+{
+   "version": "2.0.0",
+   "tasks": [
+      {
+         "label": "delete-local-branches",
+         "type": "shell",
+         "command": "for /f \"delims=\" %i in ('git branch ^| findstr /v /c:\"main\"') do git branch -D %i",
+         "windows": {
+            "command": "for /f \"delims=\" %i in ('git branch ^| findstr /v /c:\"main\"') do git branch -D %i"
+         },
+         "presentation": {
+            "reveal": "always",
+            "panel": "new"
+         }
+      }
+   ]
+}
