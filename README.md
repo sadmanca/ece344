@@ -306,17 +306,17 @@ Applications may pass through multiple layers of libraries to function (e.g. GUI
 ### 3.2.1. Compilation in C
 ```mermaid
 graph LR
-	1["main.c"] ---|"Compilation"| 2("main.o *")
-	2 ---|"Linkage"| 3["executable"]
+	1["main.c"] --> |"Compilation"| 2("main.o*")
+	2 --> |"Linkage"| 3["executable"]
 
-	4["util.c"] --- 5["util.o"]
-	5 --- 3
+	4["util.c"] --> 5["util.o"]
+	5 --> 3
 
-	6["foo.c"] --- 7["foo.o"]
-	7 --- 3
+	6["foo.c"] --> 7["foo.o"]
+	7 --> 3
 
-	8["bar.c"] --- 9["bar.o"]
-	9 --- 3
+	8["bar.c"] --> 9["bar.o"]
+	9 --> 3
 ```
 \*Object (`.o`) files are just [ELF files](#242-elf-file-format) with code for functions!
 
@@ -324,22 +324,37 @@ graph LR
 Static libraries are what our custom C code can be compiled/archived to such that code can be repeatedly linked to an executable w/o requiring recompilation: 
 
 #### 3.2.2.1. Static libraries included at LINK time
-```
-add mermaid image!!!
+```mermaid
+graph LR
+	1["util.o"] ---> |"Archive"| 2("lib.a")
+	4["foo.o"] --> 2
+	5["bar.o"] --> 2
+
+  6["main.o"] --> |"Linkage"| 7("executable") 
+	2 ---> |"Linkage"| 7
 ```
 
 ### 3.2.3. Dynamic Libraries
 Are for reusable code, accessed via `.so` files; can be used by multiple applications by existing in a single memory location that's accessible to applications.
 - e.g. `libc.so` (C standard library) is a dynamic library 
 
-```
-mermaid library
+```mermaid
+graph TB
+	1("libc.so") --> 2["Application 1"]
+	1 --> 3["Application 2"]
+  1 -.-> 4["..."]
 ```
 
 #### 3.2.3.1. Dynamic libraries included at RUN time
 
-```
-mermaid image runtime
+```mermaid
+graph LR
+	1["util.o"] ===> |"SHARED LINKAGE"| 2("lib.a")
+	4["foo.o"] ==> 2
+	5["bar.o"] ==> 2
+
+  6["main.o"] ---|"Linkage"| 7("executable") 
+	2 --- |"Linkage"| 7
 ```
 
 #### 3.2.3.2. `>>> ldd <EXE>`
