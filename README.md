@@ -2,9 +2,9 @@
   - [Core Operating Systems Concepts:](#core-operating-systems-concepts)
   - [Code example](#code-example)
 - [2023-09-18 | 2. Kernels](#2023-09-18--2-kernels)
-  - [instruction set architecture (ISA)](#instruction-set-architecture-isa)
+  - [Instruction Set Architecture (ISA)](#instruction-set-architecture-isa)
   - [Inter-Process Communication (IPC)](#inter-process-communication-ipc)
-  - [Intro to System Call](#intro-to-system-call)
+  - [Intro to System calls](#intro-to-system-calls)
     - [`write()`](#write)
     - [`exit_group()`](#exit_group)
     - [Standard File Descriptors](#standard-file-descriptors)
@@ -110,41 +110,54 @@ Source: https://laforge.eecg.utoronto.ca/ece344/2023-fall/student/materials/-/bl
 
 # 2023-09-18 | 2. Kernels
 
-## instruction set architecture (ISA)
-refers to machine code that a CPU understands. 3 main ISAs in use today:
+## Instruction Set Architecture (ISA)
+Refers to machine code that a CPU understands. 
+
+3 main ISAs in use today:
 - `x86-64 / amd64` - desktops
 - `aarch64 / arm64` - mobile
 - `riscv / rv64gc` - open source ARM alternative
 
 ## Inter-Process Communication (IPC)
-- IPC -- mechanism that allows OS to transfer data between processes
+- **IPC** -- mechanism that allows OS to transfer data between processes
 
-- File descriptor -- **not just a file**; a resource that users can either read bytes from or write bytes to; is identified by an index stored in a process
+- **File Descriptor** -- **not just a file**; a resource that users can either read bytes from or write bytes to; is identified by an index stored in a process
   - e.g. .txt file, ANY file, **terminal**
 
-## Intro to System Call 
-C functions that operate on/using the OS; [system calls](#system-calls) are the interface between [user & kernel mode](#kernel-mode-user-mode).
-& kernel mode
+## Intro to System calls
+
+System calls are C functions that operate on/using the OS; [system calls](#system-calls) are the interface between [user & kernel mode](#kernel-mode-user-mode).
+
 ### `write()`
-Writes bytes from byte array to file descriptor
 ```c
-ssize_t write(int fd, const void *buf, size_t count)
-// fd - file descriptor
-// buf - address of start of byte array (i.e. BUFFER)
-// count - number of bytes to write from buffer
+/**
+ * Writes bytes from a buffer to a file descriptor.
+ *
+ * @param: fd - The file descriptor to write to.
+ * @param: buf - A pointer to the start of the buffer.
+ * @param: count - The number of bytes to write from the buffer.
+ * 
+ * @return: The number of bytes written, or -1 on error.
+ */
+ssize_t write(int fd, const void *buf, size_t count);
 ```
 
 ### `exit_group()`
-Exits the current process and sets an exit status code (0 status code = no errors, is why `main()` has `return 0`)
+Exits the current process & sets an exit status code (0 status code = no errors; is why `main()` has `return 0`).
 ```c
-void exit_group(int status)
-// status - exit status code (0-255)
+/**
+ * Terminates all threads in a process and exits with the specified status code.
+ *
+ * @param: status - The exit status code (0-255).
+ * @return: This function does not return.
+ */
+void exit_group(int status);
 ```
 
 ### Standard File Descriptors
-- `0` / `stdin` -- standard input (read)
-- `1` / `stdout` -- standard output (write)
-- `2` / `stderr` -- standard error (**write**{.b})
+- `0` (`stdin`) -- standard input (read)
+- `1` (`stdout`) -- standard output (write)
+- `2` (`stderr`) -- standard error (**write**{.b})
 
 ## API vs. ABI
 - API (Application PROGRAMMING Interface) -- abstracts process details, only describes arguments & return value of a function
@@ -154,6 +167,7 @@ void exit_group(int status)
 OS "functions" (i.e. system call) do not have addresses; instead, to run a system call for the OS we need to generate an interrupt with a `svc` instruction **using registers for arguments** (instead of stack).
 ```c
 // e.g.
+
 // x8 - system call number
 // x0 - 1st argument
 // x1 - 2nd argument
@@ -168,28 +182,28 @@ ELF (Executable & Linkable Format):
   - ASCII encoding: `DEL 'E' 'L' 'F'`
 
 ### How ELF Files Are Structured
-1. File header -- endianness, ISA, ABI, entry point
-2. Program header -- what to load into memory & where
-3. Instructions
-4. Data
+1. **File header** -- endianness, ISA, ABI, entry point
+2. **Program header** -- what to load into memory & where
+3. **Instructions**
+4. **Data**
 
 ## Kernel vs. User Mode
 
-- Kernel mode -- CPU privilege level that gives access to more instructions; limits what software can interact with hardware (e.g. only kernel can manage virtual memory for processes)
+- **Kernel Mode** -- CPU privilege level that gives access to more instructions; limits what software can interact with hardware (e.g. only kernel can manage virtual memory for processes)
 
 
-| **CPU Mode**         | **Software**            | **Privilege level** |
+| **CPU MODE**         | **SOFTWARE**            | **PRIVILEGE LEVEL** |
 | -------------------- | ----------------------- | ------------------- |
-| U-mode (User)        | Applications, libraries | Least privileged    |
-| S-mode (Supdervisor) | Kernel                  | ↓                   |
+| U-mode (User)        | Applications, libraries | *Least privileged*  |
+| S-mode (Supervisor) | Kernel                  | ↓                   |
 | H-mode (Hypervisor)  | Virtual Machines        | ↓                   |
-| M-mode (Machines)    | Bootloader, firmware    | Most privileged     |
+| M-mode (Machines)    | Bootloader, firmware    | *Most privileged*   |
 
 ### System Calls
 
-***Q:*** how do we execute software in kernel mode? {.r}
+***Q:*** how do we execute software in kernel mode? {.lr}
 
-***A:*** using **System Calls** -- allow us to perform operations in kernel space by executing code in user space; is the only interface between user space & kernel space in Linux: {.lg}
+***A:*** using system calls -- allow us to perform operations in kernel space by executing code in user space; is the only **interface between user space & kernel space in Linux**:
 ```bash
 read write open close stat mmap brk pipe clone fork
 execve exit wait4 chdir  mkdir rmdir creat mount
@@ -199,7 +213,9 @@ init_module delete_module clock_nanosleep exit_group
 ### `strace`
 Allows us to trace (i.e. see) all system calls a Linux process makes.
 ```c
-// e.g. Hello world assembly program
+// e.g. running strace on Hello world assembly program
+
+// >>> strace ./hello-world-linux-aarch64
 execve("./hello_world", ["./hello_world"], 0x7ffd0489de40 /* 46 vars */) = 0
 write(1, "Hello world\n", 12)           = 12
 exit_group(0)                           = ?
@@ -209,12 +225,12 @@ exit_group(0)                           = ?
 
 ### Kernel as a Long Running Program
 - Kernel has no `main()`; instead, code (termed **modules**) is executed on-demand (e.g. new hardware, specific file access, manual loading)
-- Kernel modules can execute privileged instructions & access kernel data (i.e. that might be inaccessible via [System Calls](#system-calls))
+- Kernel modules can execute privileged instructions & access kernel data (i.e. that might be inaccessible via [system calls](#system-calls))
 
 ### Types of Kernels
-- Monolithic Kernel -- runs **all** OS services in kernel mode; kernel codebase is large
-- Microkernel -- runs **minimum amount** of OS services in kernel mode (minimizes security risk)
-- Hybrid -- e.g. emulation service to user mode (Windows), device driver to user mode (macOS)
+- **Monolithic** -- runs **all** OS services in kernel mode; kernel codebase is large
+- **Microkernel** -- runs **minimum amount** of OS services in kernel mode (minimizes security risk)
+- **Hybrid** -- e.g. emulation service to user mode (Windows), device driver to user mode (macOS)
 
 ## PRACTICE
 
@@ -227,7 +243,7 @@ void _start(void) {
   exit_group(0);
 }
 ```
-***A:*** line-by-line... {.lg}
+***A:*** following line-by-line using the function characteristics of [`write()`](#write) & [`exit_group()`](#exit_group) ... {.lg}
 * `write(1, ..., ...)` 
   * Write bytes to standard output file (file descriptor = 1)
 * `write(..., "Hello world\n", ...)`
@@ -241,7 +257,7 @@ void _start(void) {
 
 ***Q:*** what is the difference between strings in C and in the OS (e.g. in ELF files)? {.r}
 
-***A:*** C convention requires null-ended (`\0`) strings; ELF strings have no limitations {.lg}
+***A:*** C convention requires null-ended (`\0`) strings; ELF strings have no restrictions. {.lg}
 
 > ---
 
