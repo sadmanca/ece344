@@ -18,7 +18,7 @@
     - [2.5.3. Kernel as a Long Running Program](#253-kernel-as-a-long-running-program)
     - [2.5.4. Types of Kernels](#254-types-of-kernels)
   - [2.6. PRACTICE](#26-practice)
-- [3. Libraries (2023-09-13](#3-libraries-2023-09-13)
+- [3. Libraries (2023-09-13)](#3-libraries-2023-09-13)
   - [3.1. Applications Use Libraries](#31-applications-use-libraries)
   - [3.2. How Libraries Are Used To Compile C Code](#32-how-libraries-are-used-to-compile-c-code)
     - [3.2.1. Compilation in C](#321-compilation-in-c)
@@ -34,6 +34,13 @@
   - [3.4. System Calls vs. C Standard Library Functions](#34-system-calls-vs-c-standard-library-functions)
     - [3.4.1. C `atexit` (vs. System call `exit()` / `exit_group()`)](#341-c-atexit-vs-system-call-exit--exit_group)
   - [3.5. PRACTICE:](#35-practice)
+- [4. Process Creation (2023-09-15)](#4-process-creation-2023-09-15)
+  - [Process Control Blocks (PCBs)](#process-control-blocks-pcbs)
+  - [Process State Diagrams](#process-state-diagrams)
+  - [Reading Process States via `/proc`](#reading-process-states-via-proc)
+  - [Creating New Processes (via Cloning)](#creating-new-processes-via-cloning)
+    - [`fork()`](#fork)
+      - [`fork()` Example](#fork-example)
 
 
 <!--------------------------------{.gray}------------------------------>
@@ -295,7 +302,7 @@ void _start(void) {
 <!--------------------------------{.gray}------------------------------>
 <div style="page-break-after: always;"></div>
 
-# 3. Libraries (2023-09-13
+# 3. Libraries (2023-09-13)
 ## 3.1. Applications Use Libraries
 Applications may pass through multiple layers of libraries to function (e.g. GUI toolkit --> system daemon --> `libc`)
 - an OS consists of a kernel + libraries (required for application)
@@ -429,3 +436,106 @@ C `atexit(...)` calls the function in its given arguments `(...)` on program exi
 > ***A:*** since it is used by multiple applications, it is more efficient to have one shared copy (dynamic library) instead of a separate library for each program (static library) {.lg}
 
 
+
+
+
+
+------------------------------{.gray}------------------------------>
+
+
+
+
+
+
+<hr style="border:30px solid #FFFF; margin: 100px 0 100px 0; {.gray}"> </hr>
+
+
+
+
+
+
+<!--------------------------------{.gray}------------------------------>
+<div style="page-break-after: always;"></div>
+
+# 4. Process Creation (2023-09-15)
+recall: a process is an instance of a running program
+
+process:
+- virtual memory
+  - virtual registers
+    - stack
+    - heap
+
+| Column1 | Column2 | Column3 |
+| ------- | ------- | ------- |
+| Item1   | Item1   | Item1   |
+
+## Process Control Blocks (PCBs)
+
+**PCB** -- keeps track of info regarding processes, including:
+- Process state
+- CPU registers
+- Scheduling information
+- Memory management information
+- I/O status information
+- Any other type of accounting information
+
+## Process State Diagrams
+
+```mermaid
+start -> created --> ready <--> running --> terminated
+running --> blocked
+blocked --> ready
+running --> waiting
+```
+
+## Reading Process States via `/proc`
+`/proc` directory contains files representing kernel's state
+- subdirectories that represent processes are named with a number (process id/pid)
+- state of a process is represented within `/proc/<pid>/status`
+
+## Creating New Processes (via Cloning)
+it is more efficient for the os to clone a currently running process than to create a new one.
+
+this is done by pausing the currently running process & copying its [PCB](#process-control-blocks-pcbs) into a new child process.
+- Cloning copies all information from the parent (e.g. variables; note that child variables are separate from the parent's)
+
+### `fork()`
+`int fork(void)` clones the current process in which it is run & returns the pid of the child process:
+- `-1` -- on failure
+- `0` -- in child process
+- `>0` -- in parent process
+
+#### `fork()` Example
+```c
+int main(int argc, char *argv[]) {
+  pid_t returned_pid = fork();
+  if (retured_pid == -1) {
+    int err = errno;
+    perror("fork failed");
+    return err;
+  }
+  if (returned_pid == 0) {
+    printf("Child returned pid: %d\n", returned_pid);
+    printf("Child pid: %d\n", getpid());
+    printf("Child parent pid: %d\n", getppid());
+  }
+  else {
+    printf("Parent returned pid: %d\n", returned_pid);
+    printf("Parent pid: %d\n", getpid());
+    printf("Parent parent pid: %d\n", getppid());
+  }
+  return 0;
+}
+```
+output
+```console
+Parent returned pid: 2208
+Parent pid: 2207
+Parent parent pid: 1600
+Child returned pid: 0
+Child pid: 2208
+Child parent pid: 1
+```
+
+<!-- TODO: EXPLAIN CODE ABOVE + FINISH LEC4 NOTES! -->
