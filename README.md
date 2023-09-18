@@ -35,12 +35,14 @@
     - [3.4.1. C `atexit` (vs. System call `exit()` / `exit_group()`)](#341-c-atexit-vs-system-call-exit--exit_group)
   - [3.5. PRACTICE:](#35-practice)
 - [4. Process Creation (2023-09-15)](#4-process-creation-2023-09-15)
-  - [Process Control Blocks (PCBs)](#process-control-blocks-pcbs)
-  - [Process State Diagrams](#process-state-diagrams)
-  - [Reading Process States via `/proc`](#reading-process-states-via-proc)
-  - [Creating New Processes (via Cloning)](#creating-new-processes-via-cloning)
-    - [`fork()`](#fork)
-      - [`fork()` Example](#fork-example)
+  - [4.1. Process Control Blocks (PCBs)](#41-process-control-blocks-pcbs)
+  - [4.2. Process State Diagrams](#42-process-state-diagrams)
+  - [4.3. Reading Process States via `/proc`](#43-reading-process-states-via-proc)
+  - [4.4. Creating New Processes (via Cloning)](#44-creating-new-processes-via-cloning)
+    - [4.4.1. `fork()`](#441-fork)
+      - [4.4.1.1. `getpid()` \& `getppid()`](#4411-getpid--getppid)
+      - [4.4.1.2. `fork()` Example](#4412-fork-example)
+  - [4.5. PRACTICE](#45-practice)
 
 
 <!--------------------------------{.gray}------------------------------>
@@ -470,7 +472,7 @@ process:
 | ------- | ------- | ------- |
 | Item1   | Item1   | Item1   |
 
-## Process Control Blocks (PCBs)
+## 4.1. Process Control Blocks (PCBs)
 
 **PCB** -- keeps track of info regarding processes, including:
 - Process state
@@ -480,7 +482,7 @@ process:
 - I/O status information
 - Any other type of accounting information
 
-## Process State Diagrams
+## 4.2. Process State Diagrams
 
 ```mermaid
 start -> created --> ready <--> running --> terminated
@@ -489,53 +491,88 @@ blocked --> ready
 running --> waiting
 ```
 
-## Reading Process States via `/proc`
+## 4.3. Reading Process States via `/proc`
 `/proc` directory contains files representing kernel's state
 - subdirectories that represent processes are named with a number (process id/pid)
-- state of a process is represented within `/proc/<pid>/status`
+- state of a process is represented within `/proc/<pid>/status` (inc. name, ppid, etc.)
 
-## Creating New Processes (via Cloning)
+## 4.4. Creating New Processes (via Cloning)
 it is more efficient for the os to clone a currently running process than to create a new one.
 
 this is done by pausing the currently running process & copying its [PCB](#process-control-blocks-pcbs) into a new child process.
-- Cloning copies all information from the parent (e.g. variables; note that child variables are separate from the parent's)
+- Cloning copies all information from the parent (e.g. variables; note that child variables are separate from the parent's); value of information can change starting during/after [`fork()`](#441-fork)
 
-### `fork()`
-`int fork(void)` clones the current process in which it is run & returns the pid of the child process:
-- `-1` -- on failure
-- `0` -- in child process
-- `>0` -- in parent process
+### 4.4.1. `fork()`
+`int fork(void)` clones the current process in which it is run & returns a pid in **EACH PROCESS** (parent **AND** child):
+- **`0` -- in child process**
+- **`>0` -- in parent process**
+  - `-1` -- on failure
 
-#### `fork()` Example
+#### 4.4.1.1. `getpid()` & `getppid()`
+- `getpid()` -- returns pid of the current process
+- `getppid()` -- returns pid of the current process's parent
+
+#### 4.4.1.2. `fork()` Example
 ```c
-int main(int argc, char *argv[]) {
+int main(void) {
+
   pid_t returned_pid = fork();
+  /* both parent & child have variable `returned_pid`,
+     but with different values */
+
   if (retured_pid == -1) {
     int err = errno;
     perror("fork failed");
     return err;
   }
+
   if (returned_pid == 0) {
     printf("Child returned pid: %d\n", returned_pid);
-    printf("Child pid: %d\n", getpid());
+    printf("Child pid: %d\n", getpid()); 
     printf("Child parent pid: %d\n", getppid());
+
+  } else {
+    printf("Parent returned pid: %d\n", returned_pid); 
+    printf("Parent pid: %d\n", getpid()); 
+    printf("Parent parent pid: %d\n", getppid()); 
   }
-  else {
-    printf("Parent returned pid: %d\n", returned_pid);
-    printf("Parent pid: %d\n", getpid());
-    printf("Parent parent pid: %d\n", getppid());
-  }
+
   return 0;
 }
 ```
-output
 ```console
-Parent returned pid: 2208
-Parent pid: 2207
-Parent parent pid: 1600
-Child returned pid: 0
-Child pid: 2208
-Child parent pid: 1
+>> Parent returned pid: 2341
+>> Parent pid: 2340
+>> Parent parent pid: 1600
+>> Child returned pid: 0
+>> Child pid: 2341
+>> Child parent pid: 2340
 ```
 
-<!-- TODO: EXPLAIN CODE ABOVE + FINISH LEC4 NOTES! -->
+## 4.5. PRACTICE
+
+
+***Q:*** does parent always print before child in the [code example above](#4412-fork-example)? {.lr}
+
+> ***A:*** no; the kernel decides when to run the parent or child process (e.g. could also run in parallel if with multiple cores, again depending on the kernel; i.e. is *non-deterministic*). {.lg}
+
+---
+
+***Q:*** are variables declared after a `fork()` only created in the parent process? {.lr}
+
+> ***A:*** no; since the process is a duplicate, both the parent & child will run the same code before & after `fork()`-ing (including variable declarations after `fork()`). {.lg}
+> - to have code specific to the parent or child process, we need to use conditional logic using either the [return value of `fork()`](#441-fork) or using [`getpid()`/`getppid()`](#4411-getpid--getppid).
+
+---
+
+***Q:*** if i `malloc()` before a `fork()`, how do we `free()` the allocated memory? {.lr}
+
+> ***A:*** `malloc()`-ed memory can either be freed at the very end of the process OR in each conditional logic block for the parent & child process. {.lg}
+
+--- 
+
+***Q:*** given the code in the `fork()` example, how could we modify it to create a fork bomb? {.lr}
+
+> ***A:*** calling `fork()` again in either the parent or child conditional code block will cause `fork()` to be called recursively infinitely. {.lg}
+
+---
