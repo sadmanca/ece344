@@ -30,7 +30,7 @@
 		"scope": "markdown",
 		"prefix": "q-",
 		"body": [
-			"***Q:*** $question {.r}",
+			"***Q:*** $question {.lr}",
 		],
 		"description": "Insert question block"
 	},
@@ -38,7 +38,7 @@
 		"scope": "markdown",
 		"prefix": "a-",
 		"body": [
-			"***A:*** $answer {.lg}",
+			"> ***A:*** $answer {.lg}",
 		],
 		"description": "Insert answer block"
 	}
