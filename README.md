@@ -468,9 +468,11 @@ process:
     - stack
     - heap
 
-| Column1 | Column2 | Column3 |
-| ------- | ------- | ------- |
-| Item1   | Item1   | Item1   |
+| **// PROCESS \\\\** {.b}                    |
+| -------------------------- |
+| / VIRTUAL REGISTERS (MEMORY) \ {.p} |
+| -- Stack {.g}                      |
+| -- Heap {.g}|
 
 ## 4.1. Process Control Blocks (PCBs)
 
@@ -485,10 +487,13 @@ process:
 ## 4.2. Process State Diagrams
 
 ```mermaid
-start -> created --> ready <--> running --> terminated
-running --> blocked
-blocked --> ready
-running --> waiting
+flowchart
+	1(["CREATED"]) --> 2(["waiting"])
+	2 <--> 3(["running"])
+	3 --> 4(["blocked"])
+	4 --> 2
+	3 --> 5(["TERMINATED"])
+
 ```
 
 ## 4.3. Reading Process States via `/proc`
