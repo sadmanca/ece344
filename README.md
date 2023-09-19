@@ -74,6 +74,9 @@
     - [6.3.4. `pidof`](#634-pidof)
   - [6.4. Non-blocking Calls](#64-non-blocking-calls)
     - [6.4.1. Polling](#641-polling)
+    - [6.4.2. Using Interrupt Handlers](#642-using-interrupt-handlers)
+      - [6.4.2.1. Interrupt Handlers Run to Completion](#6421-interrupt-handlers-run-to-completion)
+      - [6.4.2.2. 3 Terms for "Interrupts" on RISC-V CPUs](#6422-3-terms-for-interrupts-on-risc-v-cpus)
   - [6.5. PRACTICE](#65-practice)
 
 
@@ -1043,7 +1046,36 @@ Non-blocking call return immediately (allows for checking if something occurs).
 ### 6.4.1. Polling
 Calling `waitpid` repeatedly until the child process exists before `wait`
 
-**ADD CODE EXAMPLES FROM LEC: https://youtu.be/l2flDnlrKFE?si=q68hjewaHihX2X-0&t=2331**
+```c
+wait-poll-example.c
+```
+
+### 6.4.2. Using Interrupt Handlers
+Instead of calling `wait()` or `waitpid()` in `main()`, we can do it in the interrupt handler since the kernel sends the SIGCHILD signal whenever one of its children exits.
+- Similar to hardware generating interrupts in the kernel
+
+```c
+wait-interrupt-example.c
+```
+
+#### 6.4.2.1. Interrupt Handlers Run to Completion
+Interrupts can occur while an interrupt handler is already running, so all interrupt handler code must be reentrant:
+- RENTRANT -- able to pause execution (*of 1st call to interrupt handler*), execute another call (*to 2nd call to same interrupt handler function*), & resume execution of 1st call after finishing 2nd call
+
+
+#### 6.4.2.2. 3 Terms for "Interrupts" on RISC-V CPUs
+- **Interrupt**
+  - Triggered by external hardware
+  - Handled by kernel (*needs to respond quickly*)
+- **Exception**
+  - Triggered by an instruction (e.g. divide-by-0, illegal memory access)
+  - Default handler is kernel (calling process suspended)
+  - Process can optionally handle exceptions
+    - e.g. Python has error throwing built-in
+    - e.g. C needs to catch exceptions via `errno` & checking for return of `NULL`/`-1`
+- **Trap**
+  - Transfer of control to a trap handler caused by either an exception or an interrupt
+    - e.g. system calls are *requested* traps
 
 ## 6.5. PRACTICE
 
