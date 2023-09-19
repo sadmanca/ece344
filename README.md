@@ -63,7 +63,7 @@
   - [6.1. Reading/Writing to Files/Standard-(In/Out)](#61-readingwriting-to-filesstandard-inout)
     - [6.1.1. `cat` Terminal Example (echo input)](#611-cat-terminal-example-echo-input)
     - [6.1.2. `cat` File Example (read file)](#612-cat-file-example-read-file)
-  - [6.2. Redirecting Standard File Descriptors Using The Shell](#62-redirecting-standard-file-descriptors-using-the-shell)
+  - [6.2. Redirecting Standard File Descriptors Using The Shell (`<`, `>`, `|`)](#62-redirecting-standard-file-descriptors-using-the-shell---)
   - [6.3. Signals](#63-signals)
     - [6.3.1. `sigaction()`](#631-sigaction)
       - [6.3.1.1. Common Signal Numbers (in Linux)](#6311-common-signal-numbers-in-linux)
@@ -80,6 +80,10 @@
       - [6.4.4.1. Interrupt Handlers Run to Completion](#6441-interrupt-handlers-run-to-completion)
       - [6.4.4.2. 3 Terms for "Interrupts" on RISC-V CPUs](#6442-3-terms-for-interrupts-on-risc-v-cpus)
   - [6.5. PRACTICE](#65-practice)
+- [7. Process Practice (2023-09-21)](#7-process-practice-2023-09-21)
+  - [7.1. `pipe()`](#71-pipe)
+    - [7.1.1. `pipe()` Example](#711-pipe-example)
+    - [7.1.2. Using `&` in Shell](#712-using--in-shell)
 
 
 <!--------------------------------{.gray}------------------------------>
@@ -929,7 +933,7 @@ int main(int argc, char *argv[]) {
 }
 ```
 
-## 6.2. Redirecting Standard File Descriptors Using The Shell
+## 6.2. Redirecting Standard File Descriptors Using The Shell (`<`, `>`, `|`)
 Replacing standard input:
 ```console
 >>> ./program-or-file-input < program-or-file-for-output.c
@@ -1181,11 +1185,13 @@ Interrupts can occur while an interrupt handler is already running, so all inter
   - Triggered by an instruction (e.g. divide-by-0, illegal memory access)
   - Default handler is kernel (calling process suspended)
   - Process can optionally handle exceptions
-    - e.g. Python has error throwing built-in
-    - e.g. C needs to catch exceptions via `errno` & checking for return of `NULL`/`-1`
+    - **not**{.lr} like C++ exceptions, but **hardware** exceptions
 - **Trap**
+  - Basically just an interrupt handler
   - Transfer of control to a trap handler caused by either an exception or an interrupt
     - e.g. system calls are *requested* traps
+      - because system call is an instruction so it would generate an exception to be handled by the kernel (e.g. `read()`, `write()`, `open()`)
+      - "I want the kernel to run some specific code"
 
 ## 6.5. PRACTICE
 
@@ -1246,3 +1252,67 @@ Interrupts can occur while an interrupt handler is already running, so all inter
 
 > ---
 ---
+
+
+
+
+
+
+
+
+
+------------------------------{.gray}------------------------------>
+
+
+
+
+
+
+<hr style="border:30px solid #FFFF; margin: 100px 0 100px 0; {.gray}"> </hr>
+
+
+
+
+
+
+<!--------------------------------{.gray}------------------------------>
+<div style="page-break-after: always;"></div>
+
+# 7. Process Practice (2023-09-21)
+## 7.1. `pipe()`
+```c
+int pipe(int pipefd[2])
+```
+- Returns:
+  - `0` -- on success (*created* 2 file descriptors)
+  - `-1` -- on failure (sets `errno`; *couldn't create* 2 file descriptors)
+- Forms a one-way communication channel using 2 file descriptors
+  - `pipefd[0]` -- read end of pipe
+  - `pipefd[1]` -- write end of pipe
+- e.g. [`|` forms a pipe between 2 processes](#62-redirecting-standard-file-descriptors-using-the-shell)
+
+```mermaid
+graph LR
+    1["pipefd[1]"] -->|writes to| 2["pipefd[0]"]
+```
+
+Can think of `pipe()` as a kernel-managed buffer
+- Kernel handles memory allocation, etc.
+- We only interface with writing to one end & reading from other end.
+
+### 7.1.1. `pipe()` Example
+
+```c
+// pipes.c
+```
+
+### 7.1.2. Using `&` in Shell
+Starts a given process & outputs pid on finish
+e.g.
+```console
+>>> sleep 10 &
+[1] 57827
+<<<<<AFTER WAITING 10 SECONDS>>>>>
+[1] * 57827 done     sleep 1
+```
+
