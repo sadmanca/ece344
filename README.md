@@ -57,9 +57,29 @@
     - [5.3.2. Zombie Process](#532-zombie-process)
       - [5.3.2.1. Zombie Example](#5321-zombie-example)
     - [5.3.3. Orphan Process](#533-orphan-process)
-      - [Orphan Example](#orphan-example)
-  - [PRACTICE](#practice)
-- [5. LEC 6 (2023-09-16)](#5-lec-6-2023-09-16)
+      - [5.3.3.1. Orphan Example](#5331-orphan-example)
+  - [5.4. PRACTICE](#54-practice)
+- [6. Basic IPC (2023-09-19)](#6-basic-ipc-2023-09-19)
+  - [6.1. Reading/Writing to Files/Standard-(In/Out)](#61-readingwriting-to-filesstandard-inout)
+    - [6.1.1. `cat` Terminal Example (echo input)](#611-cat-terminal-example-echo-input)
+    - [6.1.2. `cat` File Example (read file)](#612-cat-file-example-read-file)
+  - [6.2. Redirecting Standard File Descriptors Using The Shell](#62-redirecting-standard-file-descriptors-using-the-shell)
+  - [6.3. Signals](#63-signals)
+    - [6.3.1. `sigaction()`](#631-sigaction)
+      - [6.3.1.1. Common Signal Numbers (in Linux)](#6311-common-signal-numbers-in-linux)
+    - [6.3.2. How Signal Handlers Work](#632-how-signal-handlers-work)
+      - [6.3.2.1. `sigaction()` Example 1](#6321-sigaction-example-1)
+      - [6.3.2.2. `sigaction()` Example 2 (`read()` Error Handling)](#6322-sigaction-example-2-read-error-handling)
+    - [6.3.3. Sending Signals via `kill` in the Terminal](#633-sending-signals-via-kill-in-the-terminal)
+    - [6.3.4. `pidof`](#634-pidof)
+  - [6.4. Non-blocking Calls](#64-non-blocking-calls)
+    - [6.4.1. Blocking vs. Non-blocking Calls](#641-blocking-vs-non-blocking-calls)
+    - [6.4.2. `waitpid()` vs. `wait()`](#642-waitpid-vs-wait)
+    - [6.4.3. Polling](#643-polling)
+    - [6.4.4. Using Interrupt Handlers](#644-using-interrupt-handlers)
+      - [6.4.4.1. Interrupt Handlers Run to Completion](#6441-interrupt-handlers-run-to-completion)
+      - [6.4.4.2. 3 Terms for "Interrupts" on RISC-V CPUs](#6442-3-terms-for-interrupts-on-risc-v-cpus)
+  - [6.5. PRACTICE](#65-practice)
 
 
 <!--------------------------------{.gray}------------------------------>
@@ -698,7 +718,7 @@ Each process has an independent view of memory (i.e. virtual memory that maps to
 The OS sets the exit status when a process terminates by calling `exit()`. 
 
 A parent needs to read a child process' exit status before the child process can fully exit. 
-- This exit status **must** be acknowledged for a child process exit (otherwise waste of resources since process exits but doesn't execute anything after termination). 
+- This exit status **must** be acknowledged for a child process to fully exit (otherwise waste of resources since process exists but doesn't execute anything after termination). 
 
 There are 2 possibilities for the order of exits:
 - child exists first ([**zombie** process](#532-zombie-process))
@@ -784,7 +804,7 @@ Child process state: Z (zombie)
 ### 5.3.3. Orphan Process
 If a parent exits before a child process, the OS re-parents the child process to `init` so that the child's exit can be acknowledged by a process.
 
-#### Orphan Example
+#### 5.3.3.1. Orphan Example
 ```c
 int main(void) {
   // fork...
@@ -812,7 +832,7 @@ Child parent pid: 58061
 Child parent pid (after sleep): 1
 ```
 
-## PRACTICE 
+## 5.4. PRACTICE 
 
 ***Q:*** how can zombie (child) processes be acknowledged? {.lr}
 
@@ -848,4 +868,381 @@ Child parent pid (after sleep): 1
 <!--------------------------------{.gray}------------------------------>
 <div style="page-break-after: always;"></div>
 
-# 5. LEC 6 (2023-09-16)
+# 6. Basic IPC (2023-09-19)
+## 6.1. Reading/Writing to Files/Standard-(In/Out)
+### 6.1.1. `cat` Terminal Example (echo input)
+We `read()` from standard input (fd 0) & `write()` to standard output (fd 1):
+- Note: `write()` returns the number of bytes written (not always succesful!)
+```c
+int main() {
+  char buffer[4096];
+  ssize_t bytes_read;
+
+  // `read(0, ...)` reads from STANDARD IN
+  while ((bytes_read = read(0, buffer, sizeof(buffer))) > 0) {
+    // `write(1, ...)` writes to STANDARD OUT (i.e. terminal)
+    ssize_t bytes_written = write(1, buffer, bytes_read);
+
+    // error handling...
+
+    if (bytes_written == -1) {
+      int err = errno;
+      perror("write");
+      return err;
+    }
+    assert(bytes_read == bytes_written);
+  }
+
+  if (bytes_read == -1) {
+    int err = errno;
+    perror("read");
+    return err;
+  }
+
+  assert(bytes_read == 0);
+  return 0;
+}
+```
+
+### 6.1.2. `cat` File Example (read file)
+Linux uses the lowest available file descriptor for new files, so we can close standard input (freeing file descriptor 0 as below) to open a file instead:
+```c
+int main(int argc, char *argv[]) {
+  if (argc > 2) {
+    return EINVAL;
+  }
+
+  if (argc == 2) {
+    // `close` STANDARD IN file descriptor
+    close(0);
+    // `open` sets file descriptor 0 to given file
+    int fd = open(argv[1], O_RDONLY);
+    if (fd == -1) {
+      int err = errno;
+      perror("open");
+      return err;
+    }
+  }
+
+  // ...same code as 6.1.1. `cat` Example...
+
+}
+```
+
+## 6.2. Redirecting Standard File Descriptors Using The Shell
+Replacing standard input:
+```console
+>>> ./program-or-file-input < program-or-file-for-output.c
+```
+Redirecting across multiple processes:
+- 2 processes:
+  ```console
+  >>> cat input-file.c | ./program-or-file-that-receives-input.c
+  ```
+- \>2 processes:
+  ```console
+  >>> ./input-program-1 | ./2-program-that-receives-input-from-1 | ./3-program-that-receives-input-from-2 | ...
+  ```
+
+## 6.3. Signals 
+SIGINT (`Ctrl+C`) & EOF (`Ctrl+D`) are **signals** -- type of IPC that interrupts processes; *signals are sent to processes & the process' kernel default handlers *\**{.b} either ignore the signal or terminate the process*:
+
+- `CTRL+D` -- sends EOF (end-of-file) character to current process; signals end of input; **same as `read` returning 0 bytes reads bc it reached end of file** (*note that there is _no_ null termination to indicate EOF or end-of-string in Linux; there is only `read` returning 0 bytes*)
+  - Kernel returns 0 on closed file descriptor
+  - Need to check for errors (by saving `errno`)!
+  
+- `CTRL+C` -- sends SIGINT (keyboard interrupt) to current process
+
+*\**{.b} **Default kernel handler EXIT CODE:** $128 + signal\_number$ (outputted to terminal!)
+
+### 6.3.1. `sigaction()`
+Enables setting custom signal handlers (instead of using kernel default handlers); involves declaring a function with no return (`void`) & has `int` argument of signal number.
+
+#### 6.3.1.1. Common Signal Numbers (in Linux)
+- 2: SIGINT (interrupt from keyboard)
+- **9: SIGKILL (terminate immediately)** -- useful!
+- 11: SIGSEGV (memory access violation)
+- 15: SIGTERM (terminate)
+
+### 6.3.2. How Signal Handlers Work
+When a process receives a signal, the process pauses & then resumes after the signal handler finishes (concurrency).
+- Processes can be interrupted at any point in execution.
+
+#### 6.3.2.1. `sigaction()` Example 1
+```c
+// custom signal handler code
+void handle_signal(int signum) {
+  printf("Ignoring signal %d\n", signum);
+}
+
+// boilerplate code to set custom signal handler
+void register_signal(int signum) {
+  struct sigaction new_action = {0};
+  sigemptyset(&new_action.sa_mask);
+  new_action.sa_handler = handle_signal; // setting our custom signal handler
+
+  // error checking
+  if (sigaction(signum, &new_action, NULL) == -1) {
+    int err = errno;
+    perror("sigaction");
+    exit(err);
+  }
+}
+
+int main(void) {
+  // ...
+
+  register_signal(SIGINT); // CTRL+C
+  register_signal(SIGTERM); // CTRL+D
+
+  // ...
+
+  return 0;
+}
+```
+
+#### 6.3.2.2. `sigaction()` Example 2 (`read()` Error Handling)
+Signals (e.g. SIGINT: `CTRL+C`) can cause errors by interrupting `read()` & `write()` system calls, so they need additional error handling (via checking `errno` after checking error conditional logic [i.e. `if (... = -1)`]):
+```c
+// modifying our `cat` example above...
+
+  // ...
+
+  char buffer[4096];
+  ssize_t bytes_read;
+  while ((bytes_read = read(0, buffer, sizeof(buffer))) != 0) {
+    if (bytes_read == -1) {
+      /*-------------------*/
+      if (errno == EINTR) { // represents interrupted system calls
+      	continue;
+      /*-------------------*/
+      } else {
+    	break;
+      }
+    }
+
+    // ...
+  }
+
+  // ...
+```
+
+### 6.3.3. Sending Signals via `kill` in the Terminal
+- `>>> kill <pid>` -- sends [SIGTERM](#6211-common-signal-numbers-in-linux) to process with given pid; is ignored by default
+- `>>> kill <pid> -SIGNAL_NUMBER` -- sends signal corresponding to [`SIGNAL_NUMBER`](#6211-common-signal-numbers-in-linux)
+  - e.g. SIGKILL via `>>> kill -9 <pid>` terminates immediately by [default kernel handler](#63-how-signal-handlers-work) *unless process in [uninterruptible sleep](#52-process-states)*
+
+### 6.3.4. `pidof`
+Terminal command used to find pids of processes given program names.
+
+e.g.
+```console
+>>> pidof ./running-program
+```
+
+## 6.4. Non-blocking Calls
+Non-blocking call return immediately (allows for checking if something occurs).
+- To turn [`wait` into a non-blocking call](#531-calling-wait-on-child-processes), use `waitpid()` with `WNOHANG` in options
+- Can use a poll or interrupt to react to changes in non-blocking calls
+
+### 6.4.1. Blocking vs. Non-blocking Calls
+- Blocking call -- parent process is suspended until child process terminates (**including being acknowledged by `wait()` or `waitpid()`**)
+- Non-blocking call -- parent process continues executing while child process terminates
+
+### 6.4.2. `waitpid()` vs. `wait()`
+- [`wait()`](#5311-wait-example) 
+  - waits for ANY child process to terminate
+  - is ONLY a blocking call
+- [`waitpid()`](#64-non-blocking-calls)
+  - can be used to wait for a SPECIFIC pid of a child process
+  - can be set as a non-blocking call
+
+### 6.4.3. Polling
+Calling `waitpid` repeatedly until the child process exists before `wait`
+
+```c
+// wait-poll-example.c
+
+
+int main() {
+  pid_t pid = fork();
+  if (pid == -1) {
+    return errno;
+  }
+
+  // child process
+  if (pid == 0) {
+    sleep(2);
+  
+  // parent process
+  } else {
+    pid_t wait_pid = 0;
+    int wstatus;
+
+    unsigned int count = 0;
+
+    // POLLING `waitpid()` repeatedly
+    while (wait_pid == 0) {
+      ++count;
+      printf("Calling wait (attempt %u)\n", count);
+      // set waitpid() to non-blocking call via WNOHANG 
+      wait_pid = waitpid(pid, &wstatus, WNOHANG); 
+    }
+
+    if (wait_pid == -1) {
+      int err = errno;
+      perror("wait_pid");
+      exit(err);
+    }
+    // do something on successful child process exit via `wait`
+    // see #### 5.3.1.1. `wait()` Example for more details
+    if (WIFEXITED(wstatus)) {
+      printf("Wait returned for an exited process! pid: %d, status: %d\n", wait_pid, WEXITSTATUS(wstatus));
+    } else {
+      return ECHILD;
+    }
+  }
+  return 0;
+}
+```
+
+### 6.4.4. Using Interrupt Handlers
+Instead of calling `wait()` or `waitpid()` in `main()`, we can do it in the interrupt handler since the kernel sends the SIGCHLD signal whenever a child process exits.
+- Similar to hardware generating interrupts in the kernel
+- Interrupt handler defined using [`sigaction()`](#631-sigaction)
+
+```c
+// wait-interrupt-example.c
+void handle_signal(int signum) {
+  // ignore non-child process exits
+  if (signum != SIGCHLD) {
+    printf("Ignoring signal %d\n", signum);
+  }
+
+  printf("Calling wait\n");
+  int wstatus;
+  // no longer need to poll since signal must be from child
+  // waitpid(-1, ...) means waiting for ANY process (same as `wait()`, except as a non-blocking call bc of `waitpid()`)
+  pid_t wait_pid = waitpid(-1, &wstatus, WNOHANG);
+  if (wait_pid == -1) {
+    int err = errno;
+    perror("wait_pid");
+    exit(err);
+  }
+  if (WIFEXITED(wstatus)) {
+    printf("Wait returned for an exited process! pid: %d, status: %d\n", wait_pid, WEXITSTATUS(wstatus));
+  }
+  else {
+    exit(ECHILD);
+  }
+  exit(0);
+}
+
+void register_signal(int signum) {
+  struct sigaction new_action = {0};
+  sigemptyset(&new_action.sa_mask);
+  new_action.sa_handler = handle_signal;
+  if (sigaction(signum, &new_action, NULL) == -1) {
+    int err = errno;
+    perror("sigaction");
+    exit(err);
+  }
+
+int main() {
+  register_signal(SIGCHLD);
+
+  pid_t pid = fork();
+  if (pid == -1) {
+    return errno;
+  }
+  
+  if (pid == 0) {
+    sleep(2);
+  } else {
+    while (true) {
+      printf("Time to go to sleep\n");
+      sleep(9999);
+    }
+  }
+  return 0;
+}
+```
+
+#### 6.4.4.1. Interrupt Handlers Run to Completion
+Interrupts can occur while an interrupt handler is already running, so all interrupt handler code must be reentrant:
+- RENTRANT -- able to pause execution (*of 1st call to interrupt handler*), execute another call (*to 2nd call to same interrupt handler function*), & resume execution of 1st call after finishing 2nd call
+
+
+#### 6.4.4.2. 3 Terms for "Interrupts" on RISC-V CPUs
+- **Interrupt**
+  - Triggered by external hardware
+  - Handled by kernel (*needs to respond quickly*)
+- **Exception**
+  - Triggered by an instruction (e.g. divide-by-0, illegal memory access)
+  - Default handler is kernel (calling process suspended)
+  - Process can optionally handle exceptions
+    - e.g. Python has error throwing built-in
+    - e.g. C needs to catch exceptions via `errno` & checking for return of `NULL`/`-1`
+- **Trap**
+  - Transfer of control to a trap handler caused by either an exception or an interrupt
+    - e.g. system calls are *requested* traps
+
+## 6.5. PRACTICE
+
+***Q:*** what does file descriptor 0 represent by default? {.lr}
+> ***A:*** standard input (to terminal). {.lg}
+
+---
+
+***Q:*** what happens if we read from file descriptor 1? {.lr}
+> ***A:*** indeterminate behaviour; file descriptor 1 is for writing, so this shouldn't be done but if it was then it might act as file descriptor 0 (read) or it could fail. {.lg}
+
+---
+> ---
+
+***Q: a)*** how to use shell to redirect output from one program (`a.exe`) as input to another program (`b.exe`)? {.lr}
+> ***A:*** `>>> ./a.exe < ./b.exe` {.lg}
+
+> ---
+
+***Q: b)*** how to use shell to redirect output from one program (`a.exe`) as input to another program (`b.exe`), *and use output from `b.exe` as input to `c.exe*? {.lr}
+> ***A:*** `./a.exe | ./b.exe | ./c.exe` {.lg}
+
+> ---
+
+***Q:*** how to get the exit code $c$ of a process given a terminal exit code $x$? {.lr}
+> ***A:*** $c = 128 - x$ {.lg}
+
+---
+
+***Q:*** what type of OS concept is used in signal handling? {.lr}
+> ***A:*** concurrency; switching between running processes to simulate simulataneous execution. {.lg}
+
+---
+
+***Q:*** what happens to child processes after a process is killed via `kill -9 <pid>`? {.lr}
+> ***A:*** since parent is being terminated first, [orphan child processes](#533-orphan-process) get reparented by [`init`](#521-processkernel-startup-via-init), which continually terminates all orphan processes. {.lg}
+
+---
+> ---
+
+***Q: a)*** how to make continuous polling (for `waitpid()` in a loop) less resource-intensive w/o using interrupts? {.lr}
+> ***A:*** add a delay (e.g. $1 \frac{poll}{second}$) {.lg}
+
+```c
+  // ...
+  // e.g. delayed polling
+  while (wait_pid == 0) {
+    sleep(1)
+    wait_pid = waitpid(pid, &wstatus, WNOHANG); 
+  }
+  // ...
+```
+
+> ---
+
+***Q: b) what are the tradeoffs of excluding vs. adding the delay?***  {.lr}
+> ***A:*** adding the delay means less resource usage at the expense of response time; excluding the delay means faster response time at the expense of waste of resources. {.lg}
+
+> ---
+---
