@@ -73,10 +73,12 @@
     - [6.3.3. Sending Signals via `kill` in the Terminal](#633-sending-signals-via-kill-in-the-terminal)
     - [6.3.4. `pidof`](#634-pidof)
   - [6.4. Non-blocking Calls](#64-non-blocking-calls)
-    - [6.4.1. Polling](#641-polling)
-    - [6.4.2. Using Interrupt Handlers](#642-using-interrupt-handlers)
-      - [6.4.2.1. Interrupt Handlers Run to Completion](#6421-interrupt-handlers-run-to-completion)
-      - [6.4.2.2. 3 Terms for "Interrupts" on RISC-V CPUs](#6422-3-terms-for-interrupts-on-risc-v-cpus)
+    - [6.4.1. Blocking vs. Non-blocking Calls](#641-blocking-vs-non-blocking-calls)
+    - [6.4.2. `waitpid()` vs. `wait()`](#642-waitpid-vs-wait)
+    - [6.4.3. Polling](#643-polling)
+    - [6.4.4. Using Interrupt Handlers](#644-using-interrupt-handlers)
+      - [6.4.4.1. Interrupt Handlers Run to Completion](#6441-interrupt-handlers-run-to-completion)
+      - [6.4.4.2. 3 Terms for "Interrupts" on RISC-V CPUs](#6442-3-terms-for-interrupts-on-risc-v-cpus)
   - [6.5. PRACTICE](#65-practice)
 
 
@@ -716,7 +718,7 @@ Each process has an independent view of memory (i.e. virtual memory that maps to
 The OS sets the exit status when a process terminates by calling `exit()`. 
 
 A parent needs to read a child process' exit status before the child process can fully exit. 
-- This exit status **must** be acknowledged for a child process exit (otherwise waste of resources since process exits but doesn't execute anything after termination). 
+- This exit status **must** be acknowledged for a child process to fully exit (otherwise waste of resources since process exists but doesn't execute anything after termination). 
 
 There are 2 possibilities for the order of exits:
 - child exists first ([**zombie** process](#532-zombie-process))
@@ -937,13 +939,13 @@ Redirecting across multiple processes:
   ```console
   >>> cat input-file.c | ./program-or-file-that-receives-input.c
   ```
-- >2 processes:
+- \>2 processes:
   ```console
   >>> ./input-program-1 | ./2-program-that-receives-input-from-1 | ./3-program-that-receives-input-from-2 | ...
   ```
 
 ## 6.3. Signals 
-SIGINT (`Ctrl+C`) & EOF (`Ctrl+D`) are **signals** -- type of IPC that interrupts processes; *signals are sent to processes & the process' kernel default handlers\* either ignore the signal or terminate the process*:
+SIGINT (`Ctrl+C`) & EOF (`Ctrl+D`) are **signals** -- type of IPC that interrupts processes; *signals are sent to processes & the process' kernel default handlers *\**{.b} either ignore the signal or terminate the process*:
 
 - `CTRL+D` -- sends EOF (end-of-file) character to current process; signals end of input; **same as `read` returning 0 bytes reads bc it reached end of file** (*note that there is _no_ null termination to indicate EOF or end-of-string in Linux; there is only `read` returning 0 bytes*)
   - Kernel returns 0 on closed file descriptor
@@ -951,7 +953,7 @@ SIGINT (`Ctrl+C`) & EOF (`Ctrl+D`) are **signals** -- type of IPC that interrupt
   
 - `CTRL+C` -- sends SIGINT (keyboard interrupt) to current process
 
-\***Default kernel handler EXIT CODE:** $128 + signal_number$ (outputted to terminal!)
+*\**{.b} **Default kernel handler EXIT CODE:** $128 + signal\_number$ (outputted to terminal!)
 
 ### 6.3.1. `sigaction()`
 Enables setting custom signal handlers (instead of using kernel default handlers); involves declaring a function with no return (`void`) & has `int` argument of signal number.
@@ -1028,7 +1030,7 @@ Signals (e.g. SIGINT: `CTRL+C`) can cause errors by interrupting `read()` & `wri
 ### 6.3.3. Sending Signals via `kill` in the Terminal
 - `>>> kill <pid>` -- sends [SIGTERM](#6211-common-signal-numbers-in-linux) to process with given pid; is ignored by default
 - `>>> kill <pid> -SIGNAL_NUMBER` -- sends signal corresponding to [`SIGNAL_NUMBER`](#6211-common-signal-numbers-in-linux)
-  - e.g. SIGKILL via `>>> kill -9 <pid>` terminates immediately by [default kernel handler](#63-how-signal-handlers-work) *unless process in [uninterruptible sleep](#52-process-states*
+  - e.g. SIGKILL via `>>> kill -9 <pid>` terminates immediately by [default kernel handler](#63-how-signal-handlers-work) *unless process in [uninterruptible sleep](#52-process-states)*
 
 ### 6.3.4. `pidof`
 Terminal command used to find pids of processes given program names.
@@ -1040,30 +1042,138 @@ e.g.
 
 ## 6.4. Non-blocking Calls
 Non-blocking call return immediately (allows for checking if something occurs).
-- To turn [`wait` into a non-blocking call](#531-calling-wait-on-child-processes), use `waitpid()` with `WNDHANG` in options
+- To turn [`wait` into a non-blocking call](#531-calling-wait-on-child-processes), use `waitpid()` with `WNOHANG` in options
 - Can use a poll or interrupt to react to changes in non-blocking calls
 
-### 6.4.1. Polling
+### 6.4.1. Blocking vs. Non-blocking Calls
+- Blocking call -- parent process is suspended until child process terminates (**including being acknowledged by `wait()` or `waitpid()`**)
+- Non-blocking call -- parent process continues executing while child process terminates
+
+### 6.4.2. `waitpid()` vs. `wait()`
+- [`wait()`](#5311-wait-example) 
+  - waits for ANY child process to terminate
+  - is ONLY a blocking call
+- [`waitpid()`](#64-non-blocking-calls)
+  - can be used to wait for a SPECIFIC pid of a child process
+  - can be set as a non-blocking call
+
+### 6.4.3. Polling
 Calling `waitpid` repeatedly until the child process exists before `wait`
 
 ```c
-wait-poll-example.c
+// wait-poll-example.c
+
+
+int main() {
+  pid_t pid = fork();
+  if (pid == -1) {
+    return errno;
+  }
+
+  // child process
+  if (pid == 0) {
+    sleep(2);
+  
+  // parent process
+  } else {
+    pid_t wait_pid = 0;
+    int wstatus;
+
+    unsigned int count = 0;
+
+    // POLLING `waitpid()` repeatedly
+    while (wait_pid == 0) {
+      ++count;
+      printf("Calling wait (attempt %u)\n", count);
+      // set waitpid() to non-blocking call via WNOHANG 
+      wait_pid = waitpid(pid, &wstatus, WNOHANG); 
+    }
+
+    if (wait_pid == -1) {
+      int err = errno;
+      perror("wait_pid");
+      exit(err);
+    }
+    // do something on successful child process exit via `wait`
+    // see #### 5.3.1.1. `wait()` Example for more details
+    if (WIFEXITED(wstatus)) {
+      printf("Wait returned for an exited process! pid: %d, status: %d\n", wait_pid, WEXITSTATUS(wstatus));
+    } else {
+      return ECHILD;
+    }
+  }
+  return 0;
+}
 ```
 
-### 6.4.2. Using Interrupt Handlers
-Instead of calling `wait()` or `waitpid()` in `main()`, we can do it in the interrupt handler since the kernel sends the SIGCHILD signal whenever one of its children exits.
+### 6.4.4. Using Interrupt Handlers
+Instead of calling `wait()` or `waitpid()` in `main()`, we can do it in the interrupt handler since the kernel sends the SIGCHLD signal whenever a child process exits.
 - Similar to hardware generating interrupts in the kernel
+- Interrupt handler defined using [`sigaction()`](#631-sigaction)
 
 ```c
-wait-interrupt-example.c
+// wait-interrupt-example.c
+void handle_signal(int signum) {
+  // ignore non-child process exits
+  if (signum != SIGCHLD) {
+    printf("Ignoring signal %d\n", signum);
+  }
+
+  printf("Calling wait\n");
+  int wstatus;
+  // no longer need to poll since signal must be from child
+  // waitpid(-1, ...) means waiting for ANY process (same as `wait()`, except as a non-blocking call bc of `waitpid()`)
+  pid_t wait_pid = waitpid(-1, &wstatus, WNOHANG);
+  if (wait_pid == -1) {
+    int err = errno;
+    perror("wait_pid");
+    exit(err);
+  }
+  if (WIFEXITED(wstatus)) {
+    printf("Wait returned for an exited process! pid: %d, status: %d\n", wait_pid, WEXITSTATUS(wstatus));
+  }
+  else {
+    exit(ECHILD);
+  }
+  exit(0);
+}
+
+void register_signal(int signum) {
+  struct sigaction new_action = {0};
+  sigemptyset(&new_action.sa_mask);
+  new_action.sa_handler = handle_signal;
+  if (sigaction(signum, &new_action, NULL) == -1) {
+    int err = errno;
+    perror("sigaction");
+    exit(err);
+  }
+
+int main() {
+  register_signal(SIGCHLD);
+
+  pid_t pid = fork();
+  if (pid == -1) {
+    return errno;
+  }
+  
+  if (pid == 0) {
+    sleep(2);
+  } else {
+    while (true) {
+      printf("Time to go to sleep\n");
+      sleep(9999);
+    }
+  }
+  return 0;
+}
 ```
 
-#### 6.4.2.1. Interrupt Handlers Run to Completion
+#### 6.4.4.1. Interrupt Handlers Run to Completion
 Interrupts can occur while an interrupt handler is already running, so all interrupt handler code must be reentrant:
 - RENTRANT -- able to pause execution (*of 1st call to interrupt handler*), execute another call (*to 2nd call to same interrupt handler function*), & resume execution of 1st call after finishing 2nd call
 
 
-#### 6.4.2.2. 3 Terms for "Interrupts" on RISC-V CPUs
+#### 6.4.4.2. 3 Terms for "Interrupts" on RISC-V CPUs
 - **Interrupt**
   - Triggered by external hardware
   - Handled by kernel (*needs to respond quickly*)
@@ -1100,7 +1210,7 @@ Interrupts can occur while an interrupt handler is already running, so all inter
 
 > ---
 
-***Q:*** how to get the exit code $c$ of a process given a terminal exit code $x? {.lr}
+***Q:*** how to get the exit code $c$ of a process given a terminal exit code $x$? {.lr}
 > ***A:*** $c = 128 - x$ {.lg}
 
 ---
@@ -1112,3 +1222,27 @@ Interrupts can occur while an interrupt handler is already running, so all inter
 
 ***Q:*** what happens to child processes after a process is killed via `kill -9 <pid>`? {.lr}
 > ***A:*** since parent is being terminated first, [orphan child processes](#533-orphan-process) get reparented by [`init`](#521-processkernel-startup-via-init), which continually terminates all orphan processes. {.lg}
+
+---
+> ---
+
+***Q: a)*** how to make continuous polling (for `waitpid()` in a loop) less resource-intensive w/o using interrupts? {.lr}
+> ***A:*** add a delay (e.g. $1 \frac{poll}{second}$) {.lg}
+
+```c
+  // ...
+  // e.g. delayed polling
+  while (wait_pid == 0) {
+    sleep(1)
+    wait_pid = waitpid(pid, &wstatus, WNOHANG); 
+  }
+  // ...
+```
+
+> ---
+
+***Q: b) what are the tradeoffs of excluding vs. adding the delay?***  {.lr}
+> ***A:*** adding the delay means less resource usage at the expense of response time; excluding the delay means faster response time at the expense of waste of resources. {.lg}
+
+> ---
+---
