@@ -81,9 +81,16 @@
       - [6.4.4.2. 3 Terms for "Interrupts" on RISC-V CPUs](#6442-3-terms-for-interrupts-on-risc-v-cpus)
   - [6.5. PRACTICE](#65-practice)
 - [7. Process Practice (2023-09-21)](#7-process-practice-2023-09-21)
+  - [Multiprogramming](#multiprogramming)
+    - [Scheduler](#scheduler)
+    - [How Switching/Swapping Processes Works (via Core Scheduling Loop)](#how-switchingswapping-processes-works-via-core-scheduling-loop)
+    - [Cooperative vs. True multitasking](#cooperative-vs-true-multitasking)
+    - [Context Switching = Swapping Processes](#context-switching--swapping-processes)
   - [7.1. `pipe()`](#71-pipe)
     - [7.1.1. `pipe()` Example](#711-pipe-example)
     - [7.1.2. Using `&` in Shell](#712-using--in-shell)
+  - [PRACTICE](#practice)
+    - [2022 Final Q2](#2022-final-q2)
 
 
 <!--------------------------------{.gray}------------------------------>
@@ -1279,6 +1286,40 @@ Interrupts can occur while an interrupt handler is already running, so all inter
 <div style="page-break-after: always;"></div>
 
 # 7. Process Practice (2023-09-21)
+## Multiprogramming
+- Uniprogramming
+  - only one process running at a time
+  - multiple processes **not** running in parallel or concurrently
+- Multiprogramming
+  - allows multiple processes (can run in parallel OR concurrently)
+
+### Scheduler
+Before a process is created but after a signal has been to the OS to create it, the process is in the [waiting state](#52-process-states) until it is loaded into memory.
+- While waiting, the scheduler decides when to run the process
+
+### How Switching/Swapping Processes Works (via Core Scheduling Loop)
+```mermaid
+graph LR;
+  A(Pause current process) --> B(Save state);
+  B --> C(Get next process from scheduler);
+  C --> D(Load next process state and run);
+  D --> E(Receive request for new process)
+  E --> A
+```
+
+### Cooperative vs. True multitasking 
+We can let each process indicate when it can be paused OR have the OS pause processes itself:
+- Cooperative multitasking -- processes use a system call to tell OS to pause it
+- True multitasking -- OS retains control over pausing processes
+  - OS gives processes set time slices
+  - OS can wake up periodically using interrupts to do scheduling (instead of spending all clock cycles scheduling)
+
+
+### Context Switching = Swapping Processes
+- At minimum requires saving all current registers of process
+  - Need to save all values **using the same CPU that is being saved**
+- Context switching is pure overhead; need to be as fast as possible
+
 ## 7.1. `pipe()`
 ```c
 int pipe(int pipefd[2])
@@ -1292,8 +1333,8 @@ int pipe(int pipefd[2])
 - e.g. [`|` forms a pipe between 2 processes](#62-redirecting-standard-file-descriptors-using-the-shell)
 
 ```mermaid
-graph LR
-    1["pipefd[1]"] -->|writes to| 2["pipefd[0]"]
+graph LR;
+  1["pipefd[1]"] -->|writes to| 2["pipefd[0]"]
 ```
 
 Can think of `pipe()` as a kernel-managed buffer
@@ -1304,7 +1345,51 @@ Can think of `pipe()` as a kernel-managed buffer
 
 ```c
 // pipes.c
+
+// error handler
+void check(int ret, const char* message) {
+    if (ret != -1) { return; }
+    int error = errno;
+    perror(message);
+    exit(error);
+}
+
+int main(void) {
+    // file descriptor array of size 2 for `pipe()`
+    int fds[2];
+    // initialize pipe via `pipe(fds)`
+    check(pipe(fds), "pipe");
+
+    pid_t pid = fork();
+    check(pid, "fork");
+
+    // parent
+    if (pid > 0) {
+        const char* str = "Howdy child";
+        int len = strlen(str);
+        // write `str` to write end of pipe (`fds[1]`)
+        int bytes_written = write(fds[1], str, len);
+        check(bytes_written, "write");
+
+    // child
+    } else {
+        char buffer[4096];
+        // read end of pipe (`fds[0]`)
+        int bytes_read = read(fds[0], buffer, sizeof(buffer));
+        check(bytes_read, "read");
+        printf("Child read: %.*s\n", bytes_read, buffer);
+    }
+
+    // REMEMBER TO CLOSE PIPE ENDS!
+    close(fds[0]);
+    close(fds[1]);
+
+    return 0;
+}
 ```
+
+***Q:*** what happens to the child process if we remove the `write()` call in the parent process? {.lr}
+> ***A:*** the child process will block indefinitely on the `read()` call since it will not receive any data from that end of the pipe. {.lg}
 
 ### 7.1.2. Using `&` in Shell
 Starts a given process & outputs pid on finish
@@ -1312,7 +1397,77 @@ e.g.
 ```console
 >>> sleep 10 &
 [1] 57827
-<<<<<AFTER WAITING 10 SECONDS>>>>>
+
+>>> # ...wait 10 s...
 [1] * 57827 done     sleep 1
+
+>>>
 ```
 
+## PRACTICE
+
+### 2022 Final Q2
+
+***Q:*** For each program shown below, state whether it will produce the same output each time it is run, or whether it may produce different outputs when run multiple times. Explain why the program behaves like this. {.lr}
+- a){.lr}
+  ```c
+  int main() {
+    int i = 4;
+    while (i != 0) {
+      int pid = fork();
+      if (pid == 0) {
+        i--;
+      } else {
+        printf("%d\n", i);
+        exit(0);
+      }
+    }
+    return 0;
+  }
+  ```
+- ***A:*** `pid == 0` is child process code {.lg}
+  - each time `fork()` is called, a child process is created with a copy of `i`.
+  - the kernel non-deterministically decides whether to run the parent or child process first, so there could be different outputs each time the program is ran.
+  - <!-- REPLACE BELOW WITH MERMAID DIAGRAM -->
+  - e.g. 1: `fork()` 1 -> parent (`print 4`) -> child (`i = 3`) -> `fork()` 2 -> parent (`print 3`) -> child (`i = 3`) -> ...
+    ```console
+    4
+    3
+    ...
+    ```
+  - vs. e.g. 2: `fork()` 1 -> child (`i = 3`) -> parent (`print 3`) ->  `fork()` 2 -> parent (`print 3`) -> ...
+    ```console
+    3
+    3
+    ...
+    ```
+  - **Note** that `fork()` basically happens in the parent process repeatedly, **NOT**{.lr} the child process running the entire program separately & forking on its own.
+    - While its slightly unwieldy, both parent & child processes "share" the same `fork()` call, [only that child returns `0` & parent returns `>0`](#441-fork)
+
+- b){.lr}
+  ```c
+  int main() {
+    int i = 4;
+    while (i != 0) {
+      int pid = fork();
+      if (pid == 0) {
+        i--;
+      } else {
+        waitpid(pid, NULL, 0);
+        printf("%d\n", i);
+        exit(0);
+      }
+    }
+    return 0;
+  }
+  ```
+- ***A:***  {.lg}
+  - [`waitpid(..., ..., 0)`](#642-waitpid-vs-wait) means that the parent process waits for (i.e. is "blocked" by) the child process to exit before running.
+  - as a result, the child process code will always run before the parent process code every iteration of the loop:
+  - `fork()` 1 -> child (`i = 3`) ->  -> parent (`print 3`) -> `fork()` 2 -> child (`i = 2`) -> ...
+    ```console
+    3
+    2
+    1
+    0
+    ```
