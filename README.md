@@ -91,6 +91,8 @@
     - [7.2.2. Using `&` in Shell](#722-using--in-shell)
   - [7.3. PRACTICE](#73-practice)
     - [7.3.1. 2022 Final Q2](#731-2022-final-q2)
+- [8. Basic Scheduling (2023-09-22)](#8-basic-scheduling-2023-09-22)
+  - [8.1. PREEMPTIBLE vs. NON-PREEMPTIBLE Resources](#81-preemptible-vs-non-preemptible-resources)
 
 
 <!--------------------------------{.gray}------------------------------>
@@ -335,7 +337,8 @@ void _start(void) {
 
 
 
-------------------------------{.gray}------------------------------>
+<!--------------------------------{.gray}------------------------------>
+
 
 
 
@@ -490,7 +493,8 @@ C `atexit(...)` calls the function in its given arguments `(...)` on program exi
 
 
 
-------------------------------{.gray}------------------------------>
+<!--------------------------------{.gray}------------------------------>
+
 
 
 
@@ -627,7 +631,8 @@ Child parent pid: 2340
 
 
 
-------------------------------{.gray}------------------------------>
+<!--------------------------------{.gray}------------------------------>
+
 
 
 
@@ -862,7 +867,8 @@ Child parent pid (after sleep): 1
 
 
 
-------------------------------{.gray}------------------------------>
+<!--------------------------------{.gray}------------------------------>
+
 
 
 
@@ -1271,7 +1277,8 @@ Interrupts can occur while an interrupt handler is already running, so all inter
 
 
 
-------------------------------{.gray}------------------------------>
+<!--------------------------------{.gray}------------------------------>
+
 
 
 
@@ -1474,3 +1481,42 @@ e.g.
     1
     0
     ```
+
+  
+
+
+
+
+
+
+
+
+<!--------------------------------{.gray}------------------------------>
+
+
+
+
+
+
+
+<hr style="border:30px solid #FFFF; margin: 100px 0 100px 0; {.gray}"> </hr>
+
+
+
+
+
+
+<!--------------------------------{.gray}------------------------------>
+<div style="page-break-after: always;"></div>
+
+# 8. Basic Scheduling (2023-09-22)
+## 8.1. PREEMPTIBLE vs. NON-PREEMPTIBLE Resources
+- PREEMPTIBLE Resource
+  - Can be taken away & used for something else
+  - e.g. CPU
+  - Shared via scheduling
+- NON-PREEMPTIBLE Resource
+  - Can**NOT** be taken away w/o acknowledgement
+  - e.g. disk space, memory
+  - Shared via allocations/deallocations
+
