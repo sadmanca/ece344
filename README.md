@@ -81,16 +81,16 @@
       - [6.4.4.2. 3 Terms for "Interrupts" on RISC-V CPUs](#6442-3-terms-for-interrupts-on-risc-v-cpus)
   - [6.5. PRACTICE](#65-practice)
 - [7. Process Practice (2023-09-21)](#7-process-practice-2023-09-21)
-  - [Multiprogramming](#multiprogramming)
-    - [Scheduler](#scheduler)
-    - [How Switching/Swapping Processes Works (via Core Scheduling Loop)](#how-switchingswapping-processes-works-via-core-scheduling-loop)
-    - [Cooperative vs. True multitasking](#cooperative-vs-true-multitasking)
-    - [Context Switching = Swapping Processes](#context-switching--swapping-processes)
-  - [7.1. `pipe()`](#71-pipe)
-    - [7.1.1. `pipe()` Example](#711-pipe-example)
-    - [7.1.2. Using `&` in Shell](#712-using--in-shell)
-  - [PRACTICE](#practice)
-    - [2022 Final Q2](#2022-final-q2)
+  - [7.1. Multiprogramming](#71-multiprogramming)
+    - [7.1.1. Scheduler](#711-scheduler)
+    - [7.1.2. How Switching/Swapping Processes Works (via Core Scheduling Loop)](#712-how-switchingswapping-processes-works-via-core-scheduling-loop)
+    - [7.1.3. COOPERATIVE vs. TRUE Multitasking](#713-cooperative-vs-true-multitasking)
+    - [7.1.4. Context Switching = Swapping Processes](#714-context-switching--swapping-processes)
+  - [7.2. `pipe()`](#72-pipe)
+    - [7.2.1. `pipe()` Example](#721-pipe-example)
+    - [7.2.2. Using `&` in Shell](#722-using--in-shell)
+  - [7.3. PRACTICE](#73-practice)
+    - [7.3.1. 2022 Final Q2](#731-2022-final-q2)
 
 
 <!--------------------------------{.gray}------------------------------>
@@ -1068,6 +1068,9 @@ Non-blocking call return immediately (allows for checking if something occurs).
   - can be used to wait for a SPECIFIC pid of a child process
   - can be set as a non-blocking call
 
+***Q:*** what are some usecases for `waitpid()` & `wait()`? {.lr}
+> ***A:*** can set `waitpid()` or `wait()` so that a specific or any child process will always run before the next running period for the parent processe (e.g. [2022 Final Q2](#731-2022-final-q2)) {.lg}
+
 ### 6.4.3. Polling
 Calling `waitpid` repeatedly until the child process exists before `wait`
 
@@ -1286,18 +1289,18 @@ Interrupts can occur while an interrupt handler is already running, so all inter
 <div style="page-break-after: always;"></div>
 
 # 7. Process Practice (2023-09-21)
-## Multiprogramming
-- Uniprogramming
+## 7.1. Multiprogramming
+- **UNI**programming
   - only one process running at a time
   - multiple processes **not** running in parallel or concurrently
-- Multiprogramming
+- **MULTI**programming
   - allows multiple processes (can run in parallel OR concurrently)
 
-### Scheduler
+### 7.1.1. Scheduler
 Before a process is created but after a signal has been to the OS to create it, the process is in the [waiting state](#52-process-states) until it is loaded into memory.
 - While waiting, the scheduler decides when to run the process
 
-### How Switching/Swapping Processes Works (via Core Scheduling Loop)
+### 7.1.2. How Switching/Swapping Processes Works (via Core Scheduling Loop)
 ```mermaid
 graph LR;
   A(Pause current process) --> B(Save state);
@@ -1307,20 +1310,20 @@ graph LR;
   E --> A
 ```
 
-### Cooperative vs. True multitasking 
+### 7.1.3. COOPERATIVE vs. TRUE Multitasking 
 We can let each process indicate when it can be paused OR have the OS pause processes itself:
-- Cooperative multitasking -- processes use a system call to tell OS to pause it
-- True multitasking -- OS retains control over pausing processes
+- **COOPERATIVE** Multitasking -- processes use a system call to tell OS to pause it
+- **TRUE** Multitasking -- OS retains control over pausing processes
   - OS gives processes set time slices
   - OS can wake up periodically using interrupts to do scheduling (instead of spending all clock cycles scheduling)
 
 
-### Context Switching = Swapping Processes
+### 7.1.4. Context Switching = Swapping Processes
 - At minimum requires saving all current registers of process
   - Need to save all values **using the same CPU that is being saved**
 - Context switching is pure overhead; need to be as fast as possible
 
-## 7.1. `pipe()`
+## 7.2. `pipe()`
 ```c
 int pipe(int pipefd[2])
 ```
@@ -1341,7 +1344,7 @@ Can think of `pipe()` as a kernel-managed buffer
 - Kernel handles memory allocation, etc.
 - We only interface with writing to one end & reading from other end.
 
-### 7.1.1. `pipe()` Example
+### 7.2.1. `pipe()` Example
 
 ```c
 // pipes.c
@@ -1391,7 +1394,7 @@ int main(void) {
 ***Q:*** what happens to the child process if we remove the `write()` call in the parent process? {.lr}
 > ***A:*** the child process will block indefinitely on the `read()` call since it will not receive any data from that end of the pipe. {.lg}
 
-### 7.1.2. Using `&` in Shell
+### 7.2.2. Using `&` in Shell
 Starts a given process & outputs pid on finish
 e.g.
 ```console
@@ -1404,9 +1407,9 @@ e.g.
 >>>
 ```
 
-## PRACTICE
+## 7.3. PRACTICE
 
-### 2022 Final Q2
+### 7.3.1. 2022 Final Q2
 
 ***Q:*** For each program shown below, state whether it will produce the same output each time it is run, or whether it may produce different outputs when run multiple times. Explain why the program behaves like this. {.lr}
 - a){.lr}
