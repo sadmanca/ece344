@@ -148,7 +148,7 @@ Basic Requiremnts For A Process:
 
 ***Q:*** the compiler needs to pick an address for each variable when compiling; what issues would be present with a global registry of addresses? {.lr}
 
-***A:*** unsafe memory allocation/deletion ala programs read/writing each other's memory. {.lg} 
+***A:*** unsafe memory allocation/deletion ala programs read/writing each other's memory. {.lg}
 
 > ---
 
@@ -184,7 +184,7 @@ Source: https://laforge.eecg.utoronto.ca/ece344/2023-fall/student/materials/-/bl
 # 2. Kernels (2023-09-18)
 
 ## 2.1. Instruction Set Architecture (ISA)
-Refers to machine code that a CPU understands. 
+Refers to machine code that a CPU understands.
 
 3 main ISAs in use today:
 - `x86-64 / amd64` - desktops
@@ -209,7 +209,7 @@ System calls are C functions that operate on/using the OS; [system calls](#syste
  * @param: fd - The file descriptor to write to.
  * @param: buf - A pointer to the start of the buffer.
  * @param: count - The number of bytes to write from the buffer.
- * 
+ *
  * @return: The number of bytes written, or -1 on error.
  */
 ssize_t write(int fd, const void *buf, size_t count);
@@ -309,7 +309,7 @@ exit_group(0)                           = ?
 
 > ---
 
-***Q:*** what does the following function do? {.r} 
+***Q:*** what does the following function do? {.r}
 ```c
 void _start(void) {
   write(1, "Hello world\n", 12);
@@ -317,7 +317,7 @@ void _start(void) {
 }
 ```
 ***A:*** following line-by-line using the function characteristics of [`write()`](#write) & [`exit_group()`](#exit_group) ... {.lg}
-* `write(1, ..., ...)` 
+* `write(1, ..., ...)`
   * Write bytes to standard output file (file descriptor = 1)
 * `write(..., "Hello world\n", ...)`
   * Buffer = address of start of byte array; a string in C is an array of characters & passed as the address to the first character, so this is valid
@@ -381,7 +381,7 @@ graph LR
 \*Object (`.o`) files are just [ELF files](#242-elf-file-format) with code for functions!
 
 ### 3.2.2. Static Libraries
-Static libraries are what our custom C code can be compiled/archived to such that code can be repeatedly linked to an executable w/o requiring recompilation: 
+Static libraries are what our custom C code can be compiled/archived to such that code can be repeatedly linked to an executable w/o requiring recompilation:
 
 #### 3.2.2.1. Static libraries included at LINK time
 ```mermaid
@@ -390,13 +390,13 @@ graph LR
 	4["foo.o"] --> 2
 	5["bar.o"] --> 2
 
-  6["main.o"] --> |"Linkage"| 7("executable") 
+  6["main.o"] --> |"Linkage"| 7("executable")
 	2 ---> |"Linkage"| 7
 ```
 
 ### 3.2.3. Dynamic Libraries
 Are for reusable code, accessed via `.so` files; can be used by multiple applications by existing in a single memory location that's accessible to applications.
-- e.g. `libc.so` (C standard library) is a dynamic library 
+- e.g. `libc.so` (C standard library) is a dynamic library
 
 ```mermaid
 graph TB
@@ -413,7 +413,7 @@ graph LR
 	4["foo.o"] ==> 2
 	5["bar.o"] ==> 2
 
-  6["main.o"] --> |"Linkage"| 7("executable") 
+  6["main.o"] --> |"Linkage"| 7("executable")
 	2 -..-> |"LINKED AT RUNTIME"| 7
 ```
 
@@ -430,7 +430,7 @@ Shows which dynamic libraries an executable uses.
 ### 3.3.1. HOW Dynamic Libraries Can Break Executables
 Dynamic library `struct`s are laid out in memory with fields mathching the declaration order (see code below); changes in the order of lines can result in changes to the return values of ABI functions (e.g. `get_x(struct ...)`, `get_y(struct ...)` as below).
 
-_e.g._ 
+_e.g._
 1. consider a dynamic library with a `struct` with multiple fields corresponding to a specific data layout (e.g. C ABI); these fields are accessible by executables
 2. If a dynamic library reorders the `struct`'s fields, any executables previously using the library is using the old offsets & is now wrong
 
@@ -579,13 +579,13 @@ int main(void) {
 
   if (returned_pid == 0) {
     printf("Child returned pid: %d\n", returned_pid);
-    printf("Child pid: %d\n", getpid()); 
+    printf("Child pid: %d\n", getpid());
     printf("Child parent pid: %d\n", getppid());
 
   } else {
-    printf("Parent returned pid: %d\n", returned_pid); 
-    printf("Parent pid: %d\n", getpid()); 
-    printf("Parent parent pid: %d\n", getppid()); 
+    printf("Parent returned pid: %d\n", returned_pid);
+    printf("Parent pid: %d\n", getpid());
+    printf("Parent parent pid: %d\n", getppid());
   }
 
   return 0;
@@ -620,7 +620,7 @@ Child parent pid: 2340
 
 > ***A:*** `malloc()`-ed memory can either be freed at the very end of the process OR in each conditional logic block for the parent & child process. {.lg}
 
---- 
+---
 
 ***Q:*** given the code in the `fork()` example, how could we modify it to create a fork bomb? {.lr}
 
@@ -731,10 +731,10 @@ pids are unique for every **active** process (i.e. pids are reused after a proce
 Each process has an independent view of memory (i.e. virtual memory that maps to physical memory by the kernel).
 
 ## 5.3. Parent/Child `exit()`-ing
-The OS sets the exit status when a process terminates by calling `exit()`. 
+The OS sets the exit status when a process terminates by calling `exit()`.
 
-A parent needs to read a child process' exit status before the child process can fully exit. 
-- This exit status **must** be acknowledged for a child process to fully exit (otherwise waste of resources since process exists but doesn't execute anything after termination). 
+A parent needs to read a child process' exit status before the child process can fully exit.
+- This exit status **must** be acknowledged for a child process to fully exit (otherwise waste of resources since process exists but doesn't execute anything after termination).
 
 There are 2 possibilities for the order of exits:
 - child exists first ([**zombie** process](#532-zombie-process))
@@ -758,7 +758,7 @@ int main(void) {
   if (pid == -1) {
     return errno;
   }
-  
+
   // do nothing in parent
   if (pid == 0) {
     sleep(2);
@@ -833,7 +833,7 @@ int main(void) {
     // child re-parented to `init`
     // bc parent has exited by now
     printf("Child parent pid (after sleep): %d\n", getppid());
-    
+
   } else {
     // parent exits before child
     // bc parent sleeps for less time than child
@@ -848,7 +848,7 @@ Child parent pid: 58061
 Child parent pid (after sleep): 1
 ```
 
-## 5.4. PRACTICE 
+## 5.4. PRACTICE
 
 ***Q:*** how can zombie (child) processes be acknowledged? {.lr}
 
@@ -961,13 +961,13 @@ Redirecting across multiple processes:
   >>> ./input-program-1 | ./2-program-that-receives-input-from-1 | ./3-program-that-receives-input-from-2 | ...
   ```
 
-## 6.3. Signals 
+## 6.3. Signals
 SIGINT (`Ctrl+C`) & EOF (`Ctrl+D`) are **signals** -- type of IPC that interrupts processes; *signals are sent to processes & the process' kernel default handlers *\**{.b} either ignore the signal or terminate the process*:
 
 - `CTRL+D` -- sends EOF (end-of-file) character to current process; signals end of input; **same as `read` returning 0 bytes reads bc it reached end of file** (*note that there is _no_ null termination to indicate EOF or end-of-string in Linux; there is only `read` returning 0 bytes*)
   - Kernel returns 0 on closed file descriptor
   - Need to check for errors (by saving `errno`)!
-  
+
 - `CTRL+C` -- sends SIGINT (keyboard interrupt) to current process
 
 *\**{.b} **Default kernel handler EXIT CODE:** $128 + signal\_number$ (outputted to terminal!)
@@ -1067,7 +1067,7 @@ Non-blocking call return immediately (allows for checking if something occurs).
 - Non-blocking call -- parent process continues executing while child process terminates
 
 ### 6.4.2. `waitpid()` vs. `wait()`
-- [`wait()`](#5311-wait-example) 
+- [`wait()`](#5311-wait-example)
   - waits for ANY child process to terminate
   - is ONLY a blocking call
 - [`waitpid()`](#64-non-blocking-calls)
@@ -1093,7 +1093,7 @@ int main() {
   // child process
   if (pid == 0) {
     sleep(2);
-  
+
   // parent process
   } else {
     pid_t wait_pid = 0;
@@ -1105,8 +1105,8 @@ int main() {
     while (wait_pid == 0) {
       ++count;
       printf("Calling wait (attempt %u)\n", count);
-      // set waitpid() to non-blocking call via WNOHANG 
-      wait_pid = waitpid(pid, &wstatus, WNOHANG); 
+      // set waitpid() to non-blocking call via WNOHANG
+      wait_pid = waitpid(pid, &wstatus, WNOHANG);
     }
 
     if (wait_pid == -1) {
@@ -1175,7 +1175,7 @@ int main() {
   if (pid == -1) {
     return errno;
   }
-  
+
   if (pid == 0) {
     sleep(2);
   } else {
@@ -1256,7 +1256,7 @@ Interrupts can occur while an interrupt handler is already running, so all inter
   // e.g. delayed polling
   while (wait_pid == 0) {
     sleep(1)
-    wait_pid = waitpid(pid, &wstatus, WNOHANG); 
+    wait_pid = waitpid(pid, &wstatus, WNOHANG);
   }
   // ...
 ```
@@ -1317,7 +1317,7 @@ graph LR;
   E --> A
 ```
 
-### 7.1.3. COOPERATIVE vs. TRUE Multitasking 
+### 7.1.3. COOPERATIVE vs. TRUE Multitasking
 We can let each process indicate when it can be paused OR have the OS pause processes itself:
 - **COOPERATIVE** Multitasking -- processes use a system call to tell OS to pause it
 - **TRUE** Multitasking -- OS retains control over pausing processes
@@ -1482,7 +1482,7 @@ e.g.
     0
     ```
 
-  
+
 
 
 
@@ -1516,7 +1516,12 @@ e.g.
   - e.g. CPU
   - Shared via scheduling
 - NON-PREEMPTIBLE Resource
-  - Can**NOT** be taken away w/o acknowledgement
+  - Can**not** be taken away w/o acknowledgement
   - e.g. disk space, memory
   - Shared via allocations/deallocations
 
+<div align="right">
+<table><td>
+<a href="#start-of-content">👆 Scroll to top</a>
+</td></table>
+</div>
