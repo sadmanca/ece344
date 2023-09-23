@@ -88,11 +88,18 @@
     - [7.1.4. Context Switching = Swapping Processes](#714-context-switching--swapping-processes)
   - [7.2. `pipe()`](#72-pipe)
     - [7.2.1. `pipe()` Example](#721-pipe-example)
-  - [7.2.2. Using `&` in Shell](#722-using--in-shell)
-  - [7.3. PRACTICE](#73-practice)
-    - [7.3.1. 2022 Final Q2](#731-2022-final-q2)
-- [8. Basic Scheduling (2023-09-22)](#8-basic-scheduling-2023-09-22)
-  - [8.1. PREEMPTIBLE vs. NON-PREEMPTIBLE Resources](#81-preemptible-vs-non-preemptible-resources)
+  - [7.3. Using `&` in Shell](#73-using--in-shell)
+  - [7.4. PRACTICE](#74-practice)
+    - [7.4.1. 2022 Final Q2](#741-2022-final-q2)
+- [8. Subprocess (2023-09-22)](#8-subprocess-2023-09-22)
+  - [8.1. Lab 2 Goals](#81-lab-2-goals)
+  - [8.2. Easier to Use C APIs](#82-easier-to-use-c-apis)
+    - [8.2.1. `execlp()`](#821-execlp)
+    - [8.2.2. `dup()` \& `dup2()`](#822-dup--dup2)
+  - [8.3. Subprocess Example](#83-subprocess-example)
+    - [8.3.1. Skeleton](#831-skeleton)
+    - [8.3.2. Tasks To Do](#832-tasks-to-do)
+    - [8.3.3. Completed Code](#833-completed-code)
 
 
 <!--------------------------------{.gray}------------------------------>
@@ -1452,7 +1459,7 @@ int main(void) {
 - `read()` is able to receive 0 bytes so it does not wait indefinitely (unlike in previous example)
 - works because the kernel keeps track of how many processes have a file descriptor that refer to the write end of the pipe; if `read()` is called on a (read) file descriptor & it is not possible for that pipe to read any more data (because it was closed), then the kernel sends 0 bytes to close that (read) file descriptor
 
-## 7.2.2. Using `&` in Shell
+## 7.3. Using `&` in Shell
 Starts a given process & outputs pid on finish
 e.g.
 ```console
@@ -1465,9 +1472,9 @@ e.g.
 >>>
 ```
 
-## 7.3. PRACTICE
+## 7.4. PRACTICE
 
-### 7.3.1. 2022 Final Q2
+### 7.4.1. 2022 Final Q2
 
 ***Q:*** For each program shown below, state whether it will produce the same output each time it is run, or whether it may produce different outputs when run multiple times. Explain why the program behaves like this. {.lr}
 - a){.lr}
@@ -1532,7 +1539,14 @@ e.g.
     0
     ```
 
-
+***Q:*** does it matter whether pipe is called before or after forking? What would be different in both cases? {.lr}
+> ***A:*** {.lg}
+  - Because when you fork, the file descriptors are copied in the child, so both the parent and child can access the same things through their independent file descriptors.
+    - The memory for the pipe exists in the kernel, and you can only access it through the file descriptors returned by pipe.
+    - So when the fork happens, the kernel copies everything, including all the file descriptors and what they "point to" or what they represent.
+    - So if the pipe is before the fork, both processes would have the same file descriptors pointing to the same thing
+  - If pipe is after fork, both processes would make independent pipes, and they wouldn't share anything
+    - They're independent after the fork, so if one process closes file descriptor 3, it doesn't close it for the other process
 
 
 
@@ -1559,16 +1573,191 @@ e.g.
 <!--------------------------------{.gray}------------------------------>
 <div style="page-break-after: always;"></div>
 
-# 8. Basic Scheduling (2023-09-22)
-## 8.1. PREEMPTIBLE vs. NON-PREEMPTIBLE Resources
-- PREEMPTIBLE Resource
-  - Can be taken away & used for something else
-  - e.g. CPU
-  - Shared via scheduling
-- NON-PREEMPTIBLE Resource
-  - Can**not** be taken away w/o acknowledgement
-  - e.g. disk space, memory
-  - Shared via allocations/deallocations
+# 8. Subprocess (2023-09-22)
+## 8.1. Lab 2 Goals
+- Create a new process that launches the command line argument
+- Send the string `Testing\n` to that process
+- Receive any data it writes to standard output
+
+## 8.2. Easier to Use C APIs
+### 8.2.1. `execlp()`
+More convenient alternative to `execve()`
+```c
+int execlp(const char *file, const char *arg /* ..., (char *) NULL */);
+```
+- Returns:
+  - Does not return on success
+  - ...`-1` on failure
+- Allows for skipping use of string arrays via C varargs
+  - 1st argument `const char *file` does not need to be a path to a file, can simply be program name
+  - Can handle any number of arguments via C varargs (`const char *arg`)
+- Will search executables using directories under the `PATH` environment variable
+
+### 8.2.2. `dup()` & `dup2()`
+Creates a new file descriptor that refers to the object described by a given file descriptor
+```c
+int dup(int oldfd)
+int dup2(int oldfd, int newfd);
+```
+- Returns:
+  - ...a new file descriptor on success
+  - ...`-1` on failure
+- `dup()` returns the lowest file descriptor available
+- `dup2()` closes the `newfd` argument if open (i.e. if its a valid file descriptor) & then sets `newfd` to refer to the `oldfd`
+  - useful so you don't have to close `newfid` before calling `dup2()`
+
+## 8.3. Subprocess Example
+### 8.3.1. Skeleton
+```c
+// subprocess.c
+
+#include <assert.h>
+#include <errno.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/wait.h>
+#include <unistd.h>
+
+static void check_error(int ret, const char *message) {
+    if (ret != -1) {
+        return;
+    }
+    int err = errno;
+    perror(message);
+    exit(err);
+}
+
+static void parent(int in_pipefd[2], int out_pipefd[2], pid_t child_pid) {
+}
+
+static void child(int in_pipefd[2], int out_pipefd[2], const char *program) {
+    execlp(program, program, NULL);
+}
+
+int main(int argc, char* argv[]) {
+    if (argc != 2) {
+        return EINVAL;
+    }
+
+    int in_pipefd[2] = {0};
+
+    int out_pipefd[2] = {0};
+
+    pid_t pid = fork();
+    if (pid > 0) {
+        parent(in_pipefd, out_pipefd, pid);
+    }
+    else {
+        child(in_pipefd, out_pipefd, argv[1]);
+    }
+
+    return 0;
+}
+```
+
+### 8.3.2. Tasks To Do
+- create pipe (before `fork()`)
+- modify file descriptor to allow reading from `stdout = 1` (write) via `dup2()`
+- close file descriptors
+- modify file descriptors to allow writing to `stdout = 0` (read)
+
+### 8.3.3. Completed Code
+```c
+#include <assert.h>
+#include <errno.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/wait.h>
+#include <unistd.h>
+
+#define STDIN 0
+#define STDOUT 1
+#define STDERR 2
+
+#define READ 0
+#define WRITE 1
+
+static void check_error(int ret, const char *message) {
+    if (ret != -1) {
+        return;
+    }
+    int err = errno;
+    perror(message);
+    exit(err);
+}
+
+static void child(int in_pipefd[2], int out_pipefd[2], const char *program) {
+    // 0: stdin
+    // 1: stdout
+    // 2: stderr
+    // 3: output_pipefd[0] = read end of pipe
+    // 4: output_pipefd[1] = write end of pipe
+
+    // modify fds so that stdout writes to the pipe
+    check_error(dup2(in_pipefd[READ], STDIN), "dup2");
+    close(in_pipefd[READ]);
+    close(in_pipefd[WRITE]);
+
+    check_error(dup2(out_pipefd[WRITE], STDOUT), "dup2");
+    close(out_pipefd[READ]);
+    close(out_pipefd[WRITE]);
+    // 0: stdin --> read end of pipe
+    // 1: stdout --> write end of pipe
+    // 2: stderr
+    // 3: output_pipefd[0] = read end of pipe
+    // 4: output_pipefd[1] = write end of pipe
+
+
+    execlp(program, program, NULL);
+}
+
+static void parent(int in_pipefd[2], int out_pipefd[2], pid_t child_pid) {
+    close(in_pipefd[READ]);
+    close(out_pipefd[WRITE]);
+
+    const char* message = "Testing\n";
+    ssize_t bytes_written = write(in_pipefd[WRITE], message, strlen(message));
+    check_error(bytes_written, "write");
+    close(in_pipefd[WRITE]);
+
+    int wstatus;
+    check_error(waitpid(child_pid, &wstatus, 0), "wait");
+    assert(WIFEXITED(wstatus));
+    assert(WEXITSTATUS(wstatus) == 0);
+
+    // pipe reads from stdout noow
+    char buffer[4096];
+    ssize_t bytes_read = read(out_pipefd[READ], buffer, sizeof(buffer));
+    check_error(bytes_read, "read");
+    printf("Got: %.*s", (int) bytes_read, buffer);
+    close(out_pipefd[READ]);
+}
+
+int main(int argc, char* argv[]) {
+    if (argc != 2) {
+        return EINVAL;
+    }
+
+    int in_pipefd[2] = {0};
+    check_error(pipe(in_pipefd), "in_pipe");
+
+    int out_pipefd[2] = {0};
+    check_error(pipe(out_pipefd), "out_pipe");
+
+    pid_t pid = fork();
+    if (pid > 0) {
+        parent(in_pipefd, out_pipefd, pid);
+    }
+    else {
+        child(in_pipefd, out_pipefd, argv[1]);
+    }
+
+    return 0;
+}
+
+```
 
 <div align="right">
 <table><td>
