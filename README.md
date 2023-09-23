@@ -100,6 +100,7 @@
     - [8.3.1. Skeleton](#831-skeleton)
     - [8.3.2. Tasks To Do](#832-tasks-to-do)
     - [8.3.3. Completed Code](#833-completed-code)
+      - [8.3.3.1. Visualization of Pipes](#8331-visualization-of-pipes)
 
 
 <!--------------------------------{.gray}------------------------------>
@@ -1599,6 +1600,10 @@ Creates a new file descriptor that refers to the object described by a given fil
 int dup(int oldfd)
 int dup2(int oldfd, int newfd);
 ```
+```mermaid
+graph LR;
+  1["newfd"] -->|points to| 2["oldfd"]
+```
 - Returns:
   - ...a new file descriptor on success
   - ...`-1` on failure
@@ -1647,8 +1652,7 @@ int main(int argc, char* argv[]) {
     pid_t pid = fork();
     if (pid > 0) {
         parent(in_pipefd, out_pipefd, pid);
-    }
-    else {
+    } else {
         child(in_pipefd, out_pipefd, argv[1]);
     }
 
@@ -1672,9 +1676,9 @@ int main(int argc, char* argv[]) {
 #include <sys/wait.h>
 #include <unistd.h>
 
-#define STDIN 0
-#define STDOUT 1
-#define STDERR 2
+#define STDIN 0 // == STDIN_FILENO
+#define STDOUT 1 // == STDOUT_FILENO
+#define STDERR 2 // == STDERR_FILENO
 
 #define READ 0
 #define WRITE 1
@@ -1689,73 +1693,80 @@ static void check_error(int ret, const char *message) {
 }
 
 static void child(int in_pipefd[2], int out_pipefd[2], const char *program) {
-    // 0: stdin
-    // 1: stdout
-    // 2: stderr
-    // 3: output_pipefd[0] = read end of pipe
-    // 4: output_pipefd[1] = write end of pipe
+  // 0: stdin
+  // 1: stdout
+  // 2: stderr
+  // 3: output_pipefd[0] = read end of pipe
+  // 4: output_pipefd[1] = write end of pipe
 
-    // modify fds so that stdout writes to the pipe
-    check_error(dup2(in_pipefd[READ], STDIN), "dup2");
-    close(in_pipefd[READ]);
-    close(in_pipefd[WRITE]);
+  // modify fds so stdin redirects to input of pipe used to input something to output pipe...
+  // ---> take the "file" pointed to by `in_pipefd[READ]` & make STDIN point to it
+  check_error(dup2(in_pipefd[READ], STDIN), "dup2");
+  close(in_pipefd[READ]);
+  close(in_pipefd[WRITE]);
 
-    check_error(dup2(out_pipefd[WRITE], STDOUT), "dup2");
-    close(out_pipefd[READ]);
-    close(out_pipefd[WRITE]);
-    // 0: stdin --> read end of pipe
-    // 1: stdout --> write end of pipe
-    // 2: stderr
-    // 3: output_pipefd[0] = read end of pipe
-    // 4: output_pipefd[1] = write end of pipe
+  // ...and so stdout redirects to write to pipe used to read some output
+  // ---> take the "file" pointed to by `out_pipefd[WRITE]` & make STDOUT point to it
+  check_error(dup2(out_pipefd[WRITE], STDOUT), "dup2");
+  close(out_pipefd[READ]);
+  close(out_pipefd[WRITE]);
+  // 0: stdin --> read end of pipe
+  // 1: stdout --> write end of pipe
+  // 2: stderr
+  // 3: output_pipefd[0] = read end of pipe
+  // 4: output_pipefd[1] = write end of pipe
 
-
-    execlp(program, program, NULL);
+  execlp(program, program, NULL);
 }
 
 static void parent(int in_pipefd[2], int out_pipefd[2], pid_t child_pid) {
-    close(in_pipefd[READ]);
-    close(out_pipefd[WRITE]);
+  close(in_pipefd[READ]); // we are not reading from the pipe used to input something
+  close(out_pipefd[WRITE]); // we are not writing to the pipe used to read some output
 
-    const char* message = "Testing\n";
-    ssize_t bytes_written = write(in_pipefd[WRITE], message, strlen(message));
-    check_error(bytes_written, "write");
-    close(in_pipefd[WRITE]);
+  // write to the input pipe
+  const char* message = "Testing\n";
+  ssize_t bytes_written = write(in_pipefd[WRITE], message, strlen(message));
+  check_error(bytes_written, "write");
+  close(in_pipefd[WRITE]); // close input pipe after writing
 
-    int wstatus;
-    check_error(waitpid(child_pid, &wstatus, 0), "wait");
-    assert(WIFEXITED(wstatus));
-    assert(WEXITSTATUS(wstatus) == 0);
+  // wait for child process to exit via `waitpid`
+  int wstatus;
+  check_error(waitpid(child_pid, &wstatus, 0), "wait");
+  assert(WIFEXITED(wstatus));
+  assert(WEXITSTATUS(wstatus) == 0);
 
-    // pipe reads from stdout noow
-    char buffer[4096];
-    ssize_t bytes_read = read(out_pipefd[READ], buffer, sizeof(buffer));
-    check_error(bytes_read, "read");
-    printf("Got: %.*s", (int) bytes_read, buffer);
-    close(out_pipefd[READ]);
+  // output pipe reads from stdout now
+  char buffer[4096];
+  ssize_t bytes_read = read(out_pipefd[READ], buffer, sizeof(buffer));
+  check_error(bytes_read, "read");
+  printf("Got: %.*s", (int) bytes_read, buffer);
+  close(out_pipefd[READ]); // close output pipe after reading
 }
 
 int main(int argc, char* argv[]) {
-    if (argc != 2) {
-        return EINVAL;
-    }
+  if (argc != 2) {
+    return EINVAL;
+  }
 
-    int in_pipefd[2] = {0};
-    check_error(pipe(in_pipefd), "in_pipe");
+  int in_pipefd[2] = {0};
+  check_error(pipe(in_pipefd), "in_pipe");
 
-    int out_pipefd[2] = {0};
-    check_error(pipe(out_pipefd), "out_pipe");
+  int out_pipefd[2] = {0};
+  check_error(pipe(out_pipefd), "out_pipe");
 
-    pid_t pid = fork();
-    if (pid > 0) {
-        parent(in_pipefd, out_pipefd, pid);
-    }
-    else {
-        child(in_pipefd, out_pipefd, argv[1]);
-    }
+  pid_t pid = fork();
+  if (pid > 0) {
+    parent(in_pipefd, out_pipefd, pid);
+  } else {
+    child(in_pipefd, out_pipefd, argv[1]);
+  }
 
-    return 0;
+  return 0;
 }
+```
+
+#### 8.3.3.1. Visualization of Pipes
+```mermaid
 
 ```
 
