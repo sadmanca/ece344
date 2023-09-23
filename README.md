@@ -1566,6 +1566,12 @@ e.g.
   - e.g. CPU
   - Shared via scheduling
 - NON-PREEMPTIBLE Resource
-  - Can**NOT** be taken away w/o acknowledgement
+  - Can**not** be taken away w/o acknowledgement
   - e.g. disk space, memory
   - Shared via allocations/deallocations
+
+<div align="right">
+<table><td>
+<a href="#start-of-content">👆 Scroll to top</a>
+</td></table>
+</div>
