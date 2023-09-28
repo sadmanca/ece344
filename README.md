@@ -101,6 +101,15 @@
     - [8.3.2. Tasks To Do](#832-tasks-to-do)
     - [8.3.3. Completed Code](#833-completed-code)
       - [8.3.3.1. Visualization of Pipes](#8331-visualization-of-pipes)
+- [9. Basic Scheduling (2023-09-27)](#9-basic-scheduling-2023-09-27)
+  - [9.1. PREEMPTIBLE vs. NON-PREEMPTIBLE Resources](#91-preemptible-vs-non-preemptible-resources)
+  - [Dispatcher \& Scheduler](#dispatcher--scheduler)
+  - [Basic Scheduling DETAILS](#basic-scheduling-details)
+    - [scheduler runs whenever a process changes state](#scheduler-runs-whenever-a-process-changes-state)
+    - [Scheduler Goals](#scheduler-goals)
+  - [Basic Scheduling TECHNIQUES](#basic-scheduling-techniques)
+    - [FCFS (First Come First Served) / FIFO](#fcfs-first-come-first-served--fifo)
+    - [SJF](#sjf)
 
 
 <!--------------------------------{.gray}------------------------------>
@@ -1775,3 +1784,108 @@ int main(int argc, char* argv[]) {
 <a href="#start-of-content">👆 Scroll to top</a>
 </td></table>
 </div>
+
+
+
+
+
+
+
+
+<!--------------------------------{.gray}------------------------------>
+
+
+
+
+
+
+
+<hr style="border:30px solid #FFFF; margin: 100px 0 100px 0; {.gray}"> </hr>
+
+
+
+
+
+
+<!--------------------------------{.gray}------------------------------>
+<div style="page-break-after: always;"></div>
+
+# 9. Basic Scheduling (2023-09-27)
+## 9.1. PREEMPTIBLE vs. NON-PREEMPTIBLE Resources
+- **Preemptible Resource**
+  - can be taken away from a process (by the kernel) & used for a different process
+  - is shared by process scheduling
+  - e.g. CPU
+- **Non-Preemptible Resource**
+  - cannot be taken away from a process **WITHOUT ACKNOWLEDGEMENT** (by the process, say, terminating)
+  - is shared via allocations/deallocations (of resources to a process by the kernel)
+  - e.g. disk memory
+
+
+## Dispatcher & Scheduler
+- **Dispatcher**
+  - responsible for context switching between processes
+  - low-level mechanism
+- **Scheduler**
+  - responsible for deciding which process to run (& only *sometimes* when)
+  - high-level policy
+
+## Basic Scheduling DETAILS
+### scheduler runs whenever a process changes state
+- **Non-Preemptible Resources**
+  - once a non-preemptible process starts, it runs until completion
+  - scheduler only makes a decision when process non-preemptible terminate
+- **Preemptible Resources**
+  - preemptive processes/mode allows OS to run scheduler at will (inc. during process runtime)
+
+### Scheduler Goals
+- Minimize response (waiting) time
+  - don't have a process waiting too long (or too long to start)
+- Maximize CPU utilization
+  - avoid CPU idling
+- Maximize throughput (number of proceses completed)
+- Fairness
+  - attempt to give each process the same percentage of CPU
+
+## Basic Scheduling TECHNIQUES
+### FCFS (First Come First Served) / FIFO
+- most basic scheduler
+- first process arrived gets CPU time
+- new processes are stored in a FIFO queue in arrival order
+- *avg waiting time depends on arrival order*
+
+> ---
+***Q: a)*** given the following process info, what is the process schedule? {.lr}
+
+| Process | Arrival Time | Burst Time |
+| ------- | ------------ | ---------- |
+| $P_1$   | 0            | 7          |
+| $P_2$   | 0            | 4          |
+| $P_3$   | 0            | 1          |
+| $P_4$   | 0            | 4          |
+
+> ***A:*** assuming ${P_1} \rightarrow {P_2} \rightarrow {P_3} \rightarrow {P_4}$, the process schedule is... {.lg}
+
+![](2023-09-28-12-47-45.png)
+
+***Q: b)*** what is the average waiting time? {.lr}
+
+> ***A:*** $\text{avg waiting time} = \frac{\Sigma \text{ (waiting time for process } p_i)}{\text{num processes}} = \frac{0 + 7 + 11 + 12 + 16}{4} = 7.5$ {.lg}
+
+> ---
+
+***Q: c)*** what is the process schedule *if the process arrival order is inverted*? {.lr}
+
+> ***A:*** now ${P_4} \rightarrow {P_3} \rightarrow {P_2} \rightarrow {P_1}$, ... {.lg}
+
+> ---
+
+![](2023-09-28-12-56-07.png)
+
+***Q: d)*** what is the average waiting time *if the process arrival order is inverted*? {.lr}
+
+> ***A:*** $\text{avg waiting time} = \frac{\Sigma \text{ (waiting time for process } p_i)}{\text{num processes}} = \frac{0 + 1 + 5 + 9 + 16}{4} = 3.75$ {.lg}
+
+> ---
+
+### SJF
