@@ -109,7 +109,12 @@
     - [Scheduler Goals](#scheduler-goals)
   - [Basic Scheduling TECHNIQUES](#basic-scheduling-techniques)
     - [FCFS (First Come First Served) / FIFO](#fcfs-first-come-first-served--fifo)
-    - [SJF](#sjf)
+    - [SJF (Shortest Job First)](#sjf-shortest-job-first)
+      - [Tradeoffs with SJF](#tradeoffs-with-sjf)
+    - [SRTF (Shortest Remaining Time First)](#srtf-shortest-remaining-time-first)
+      - [Tradeoffs with SRTF](#tradeoffs-with-srtf)
+    - [Round-Robin (RR)](#round-robin-rr)
+      - [Tradeoffs with RR](#tradeoffs-with-rr)
 
 
 <!--------------------------------{.gray}------------------------------>
@@ -1868,6 +1873,8 @@ int main(int argc, char* argv[]) {
 
 ![](2023-09-28-12-47-45.png)
 
+> ---
+
 ***Q: b)*** what is the average waiting time? {.lr}
 
 > ***A:*** $\text{avg waiting time} = \frac{\Sigma \text{ (waiting time for process } p_i)}{\text{num processes}} = \frac{0 + 7 + 11 + 12 + 16}{4} = 7.5$ {.lg}
@@ -1878,8 +1885,6 @@ int main(int argc, char* argv[]) {
 
 > ***A:*** now ${P_4} \rightarrow {P_3} \rightarrow {P_2} \rightarrow {P_1}$, ... {.lg}
 
-> ---
-
 ![](2023-09-28-12-56-07.png)
 
 ***Q: d)*** what is the average waiting time *if the process arrival order is inverted*? {.lr}
@@ -1888,4 +1893,148 @@ int main(int argc, char* argv[]) {
 
 > ---
 
-### SJF
+### SJF (Shortest Job First)
+
+- Always schedules the job with the shortest burst time first
+  - For queued processes with the same burst time, the process that arrived first is scheduled first (i.e. [FCFS](#fcfs-first-come-first-served--fifo) for same burst times)
+- Assumes no premeption
+
+#### Tradeoffs with SJF
+- PROS
+  - reduces avg. wait time
+- CONS
+  - cannot know burst times of each process
+  - predictions of future processes can starve longer processes (i.e. never execute)
+
+***Q:*** given the following process info, what is the process schedule & avg. waiting time? {.lr}
+
+| Process | Arrival Time | Burst Time |
+| ------- | ------------ | ---------- |
+| $P_1$   | 0            | 7          |
+| $P_2$   | 2            | 4          |
+| $P_3$   | 4            | 1          |
+| $P_4$   | 5            | 4          |
+
+> ***A:*** $\text{avg waiting time} = \frac{\Sigma \text{ (waiting time for process } p_i)}{\text{num processes}} = \frac{0 + 6 + 3 + 7}{4} = 4$ {.lg}
+  - note that $P_1$ (& every process) runs to completion ($P_2$-$P_4$ arrive during $P_1$ execution but only run after $P_1$ completion)
+  - after $P_1$ ends, the scheduler runs the process with the shortest burst time amongst the queued processes ($P_3$ out of $P_2$-$P_4$)
+  - $P_2$ & $P_4$ have the same burst time, but $P_2$ arrived first so it runs before $P_4$
+
+![](2023-10-02-00-10-22.png)
+
+> ---
+
+### SRTF (Shortest Remaining Time First)
+
+- SJF **WITH**{.g} preemption
+  - currently executing processes can be interrupted by newly arrived, *shorter* processes
+  - assumes minimum execution time is 1 unit
+  - optimizes avg. waiting time better than [SJF](#sjf-shortest-job-first)
+
+#### Tradeoffs with SRTF
+- PROS
+  - optimizes lowest waiting time (even lower than [SJF](#sjf-shortest-job-first))
+- CONS
+  - more context switching can mean more wasted time
+  - starvation remains an issue
+
+***Q:*** given the following process info, what is the process schedule & avg. waiting time? {.lr}
+
+| Process | Arrival Time | Burst Time |
+| ------- | ------------ | ---------- |
+| $P_1$   | 0            | 7          |
+| $P_2$   | 2            | 4          |
+| $P_3$   | 4            | 1          |
+| $P_4$   | 5            | 4          |
+
+> ***A:*** $\text{avg. waiting time} = \frac{\Sigma \text{ (waiting time for process } p_i)}{\text{num processes}} = \frac{9+1+0+2}{4} = 3$ {.lg}
+  - when a process arrives with a shorter  burst time than the currently executing process' **remaining** burst time, it runs first (e.g. $P_2$ while $P_1$ is running, $P_3$ while $P_2$ is running)
+    - after the new interrupting process finishes, execution returns to the process it interrupted (e.g. from $P_3$ back to $P_2$, back to $P_1$)
+    - if a newly arrived process does *not* have a shorter burst time than the currently running process, it waits on the queue
+
+![](2023-10-02-00-31-46.png)
+
+### Round-Robin (RR)
+- OS divides execution into time slices/quanta for each process based on fairness (more important process = larger time slice)
+- circular FIFO queue of FCFS processes (processes that don't finish by the end of their time slice/quantum get re-added to the **back** of the queue)
+
+#### Tradeoffs with RR
+- PROS
+  - low avg. response time
+  - low avg. waiting time
+  - fair allocation of CPY
+- CONS
+  - ppor avg. waiting time when jobs have similar lengths
+  - performance depends on manually set quantum length
+    - too high: equivalent to [FCFS](#fcfs-first-come-first-served--fifo)
+    - too low: too many context switches (overhead)
+
+> ---
+
+***Q: a)*** given the following process info, what is the process schedule **GIVEN A QUANTUM LENGTH OF $3$**{.r}? {.lr}
+
+| Process | Arrival Time | Burst Time |
+| ------- | ------------ | ---------- |
+| $P_1$   | 0            | 7          |
+| $P_2$   | 2            | 4          |
+| $P_3$   | 4            | 1          |
+| $P_4$   | 5            | 4          |
+
+> ***A:*** {.lg}
+
+![](2023-10-02-00-43-56.png)
+
+> ---
+
+***Q: b)*** what is the average waiting time? {.lr}
+
+> ***A:*** $\text{avg waiting time} = \frac{\Sigma (\text{waiting time for process } p_i)}{\text{num processes}} = \frac{(15-0-7) + (14-2-4) + (10-4-1) + (16-5-4)}{4} = \frac{(8) + (8) + (2) + (7)}{4} = 7$ {.lg}
+
+  - **TRICK:** for each process, $\text{waiting time}_{P_i} = \text{completion time} - \text{arrival time} - \text{num units } P_i \text{ ran for}$
+    - e.g. for $P_1$:  $\text{waiting time}_{P_i} = 15 - 0 - 7 = 8$
+    - highlighted in yellow: $7 = \text{num units } P_i \text{ ran for}$
+    - ![](2023-10-02-00-51-57.png)
+
+> ---
+
+***Q: c)*** what is the average response time? {.lr}
+
+> ***A:*** $\text{avg. RESPONSE time} = \frac{\Sigma (\text{waiting time UNTIL FIRST EXECUTION})}{\text{num processes}} = \frac{0 + 1 + 5 + 5}{4} = 2.75$ {.lg}
+- response time = number of units until preemption/first execution
+
+> ---
+
+***Q: d)*** why is response time important? {.lr}
+> ***A:*** user-facing GUIs need to respond quickly otherwise they can be perceived as lagging/slow {.lg}
+
+> ---
+
+***Q: e)*** how many context switches occurred? {.lr}
+> ***A:*** $7$ {.lg}
+
+![](2023-10-02-01-19-09.png)
+
+> ---
+
+***Q: e)*** given the previous process info, what are the process schedule, avg. waiting time, avg. response time, & number of context switches **GIVEN A QUANTUM LENGTH OF $1$**{.r}? {.lr}
+
+![](2023-10-02-01-22-14.png)
+
+> ---
+
+***Q:*** given the previous process info & a RR scheduler, what are the process schedule, avg. waiting time, avg. response time, & number of context switches **GIVEN A QUANTUM LENGTH OF $10$**{.r}? {.lr}
+
+| Process | Arrival Time | Burst Time |
+| ------- | ------------ | ---------- |
+| $P_1$   | 0            | 7          |
+| $P_2$   | 2            | 4          |
+| $P_3$   | 4            | 1          |
+| $P_4$   | 5            | 4          |
+
+- ***A:***  {.lg}
+  - number of context switches = 3
+  - avg. waiting time = (0+5+7+7)/4 = 4.75
+  - avg. response time - (0+5+7+7)/4 = 4.75
+  - ^METRICS WERE SAME AS FCFS W/O PREEMPTIONS!
+
+![](2023-10-02-01-25-23.png)
