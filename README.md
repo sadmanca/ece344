@@ -103,18 +103,20 @@
       - [8.3.3.1. Visualization of Pipes](#8331-visualization-of-pipes)
 - [9. Basic Scheduling (2023-09-27)](#9-basic-scheduling-2023-09-27)
   - [9.1. PREEMPTIBLE vs. NON-PREEMPTIBLE Resources](#91-preemptible-vs-non-preemptible-resources)
-  - [Dispatcher \& Scheduler](#dispatcher--scheduler)
-  - [Basic Scheduling DETAILS](#basic-scheduling-details)
-    - [scheduler runs whenever a process changes state](#scheduler-runs-whenever-a-process-changes-state)
-    - [Scheduler Goals](#scheduler-goals)
-  - [Basic Scheduling TECHNIQUES](#basic-scheduling-techniques)
-    - [FCFS (First Come First Served) / FIFO](#fcfs-first-come-first-served--fifo)
-    - [SJF (Shortest Job First)](#sjf-shortest-job-first)
-      - [Tradeoffs with SJF](#tradeoffs-with-sjf)
-    - [SRTF (Shortest Remaining Time First)](#srtf-shortest-remaining-time-first)
-      - [Tradeoffs with SRTF](#tradeoffs-with-srtf)
-    - [Round-Robin (RR)](#round-robin-rr)
-      - [Tradeoffs with RR](#tradeoffs-with-rr)
+  - [9.2. Dispatcher \& Scheduler](#92-dispatcher--scheduler)
+  - [9.3. Basic Scheduling DETAILS](#93-basic-scheduling-details)
+    - [9.3.1. scheduler runs whenever a process changes state](#931-scheduler-runs-whenever-a-process-changes-state)
+    - [9.3.2. Scheduler Goals](#932-scheduler-goals)
+  - [9.4. Basic Scheduling TECHNIQUES](#94-basic-scheduling-techniques)
+    - [9.4.1. FCFS (First Come First Served) / FIFO](#941-fcfs-first-come-first-served--fifo)
+    - [9.4.2. SJF (Shortest Job First)](#942-sjf-shortest-job-first)
+      - [9.4.2.1. Tradeoffs with SJF](#9421-tradeoffs-with-sjf)
+    - [9.4.3. SRTF (Shortest Remaining Time First)](#943-srtf-shortest-remaining-time-first)
+      - [9.4.3.1. Tradeoffs with SRTF](#9431-tradeoffs-with-srtf)
+    - [9.4.4. Round-Robin (RR)](#944-round-robin-rr)
+      - [9.4.4.1. Tradeoffs with RR](#9441-tradeoffs-with-rr)
+- [10. Advanced Scheduling (2023-09-28)](#10-advanced-scheduling-2023-09-28)
+  - [10.1. CPU-Nonspecific Scheduling](#101-cpu-nonspecific-scheduling)
 
 
 <!--------------------------------{.gray}------------------------------>
@@ -1827,7 +1829,7 @@ int main(int argc, char* argv[]) {
   - e.g. disk memory
 
 
-## Dispatcher & Scheduler
+## 9.2. Dispatcher & Scheduler
 - **Dispatcher**
   - responsible for context switching between processes
   - low-level mechanism
@@ -1835,15 +1837,15 @@ int main(int argc, char* argv[]) {
   - responsible for deciding which process to run (& only *sometimes* when)
   - high-level policy
 
-## Basic Scheduling DETAILS
-### scheduler runs whenever a process changes state
+## 9.3. Basic Scheduling DETAILS
+### 9.3.1. scheduler runs whenever a process changes state
 - **Non-Preemptible Resources**
   - once a non-preemptible process starts, it runs until completion
   - scheduler only makes a decision when process non-preemptible terminate
 - **Preemptible Resources**
   - preemptive processes/mode allows OS to run scheduler at will (inc. during process runtime)
 
-### Scheduler Goals
+### 9.3.2. Scheduler Goals
 - Minimize response (waiting) time
   - don't have a process waiting too long (or too long to start)
 - Maximize CPU utilization
@@ -1852,8 +1854,8 @@ int main(int argc, char* argv[]) {
 - Fairness
   - attempt to give each process the same percentage of CPU
 
-## Basic Scheduling TECHNIQUES
-### FCFS (First Come First Served) / FIFO
+## 9.4. Basic Scheduling TECHNIQUES
+### 9.4.1. FCFS (First Come First Served) / FIFO
 - most basic scheduler
 - first process arrived gets CPU time
 - new processes are stored in a FIFO queue in arrival order
@@ -1893,13 +1895,13 @@ int main(int argc, char* argv[]) {
 
 > ---
 
-### SJF (Shortest Job First)
+### 9.4.2. SJF (Shortest Job First)
 
 - Always schedules the job with the shortest burst time first
   - For queued processes with the same burst time, the process that arrived first is scheduled first (i.e. [FCFS](#fcfs-first-come-first-served--fifo) for same burst times)
 - Assumes no premeption
 
-#### Tradeoffs with SJF
+#### 9.4.2.1. Tradeoffs with SJF
 - PROS
   - reduces avg. wait time
 - CONS
@@ -1924,14 +1926,14 @@ int main(int argc, char* argv[]) {
 
 > ---
 
-### SRTF (Shortest Remaining Time First)
+### 9.4.3. SRTF (Shortest Remaining Time First)
 
 - SJF **WITH**{.g} preemption
   - currently executing processes can be interrupted by newly arrived, *shorter* processes
   - assumes minimum execution time is 1 unit
   - optimizes avg. waiting time better than [SJF](#sjf-shortest-job-first)
 
-#### Tradeoffs with SRTF
+#### 9.4.3.1. Tradeoffs with SRTF
 - PROS
   - optimizes lowest waiting time (even lower than [SJF](#sjf-shortest-job-first))
 - CONS
@@ -1954,11 +1956,11 @@ int main(int argc, char* argv[]) {
 
 ![](2023-10-02-00-31-46.png)
 
-### Round-Robin (RR)
+### 9.4.4. Round-Robin (RR)
 - OS divides execution into time slices/quanta for each process based on fairness (more important process = larger time slice)
 - circular FIFO queue of FCFS processes (processes that don't finish by the end of their time slice/quantum get re-added to the **back** of the queue)
 
-#### Tradeoffs with RR
+#### 9.4.4.1. Tradeoffs with RR
 - PROS
   - low avg. response time
   - low avg. waiting time
@@ -2038,3 +2040,31 @@ int main(int argc, char* argv[]) {
   - ^METRICS WERE SAME AS FCFS W/O PREEMPTIONS!
 
 ![](2023-10-02-01-25-23.png)
+
+
+
+
+
+
+
+
+<!--------------------------------{.gray}------------------------------>
+
+
+
+
+
+
+
+<hr style="border:30px solid #FFFF; margin: 100px 0 100px 0; {.gray}"> </hr>
+
+
+
+
+
+
+<!--------------------------------{.gray}------------------------------>
+<div style="page-break-after: always;"></div>
+
+# 10. Advanced Scheduling (2023-09-28)
+## 10.1. CPU-Nonspecific Scheduling
