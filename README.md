@@ -103,18 +103,39 @@
       - [8.3.3.1. Visualization of Pipes](#8331-visualization-of-pipes)
 - [9. Basic Scheduling (2023-09-27)](#9-basic-scheduling-2023-09-27)
   - [9.1. PREEMPTIBLE vs. NON-PREEMPTIBLE Resources](#91-preemptible-vs-non-preemptible-resources)
-  - [Dispatcher \& Scheduler](#dispatcher--scheduler)
-  - [Basic Scheduling DETAILS](#basic-scheduling-details)
-    - [scheduler runs whenever a process changes state](#scheduler-runs-whenever-a-process-changes-state)
-    - [Scheduler Goals](#scheduler-goals)
-  - [Basic Scheduling TECHNIQUES](#basic-scheduling-techniques)
-    - [FCFS (First Come First Served) / FIFO](#fcfs-first-come-first-served--fifo)
-    - [SJF (Shortest Job First)](#sjf-shortest-job-first)
-      - [Tradeoffs with SJF](#tradeoffs-with-sjf)
-    - [SRTF (Shortest Remaining Time First)](#srtf-shortest-remaining-time-first)
-      - [Tradeoffs with SRTF](#tradeoffs-with-srtf)
-    - [Round-Robin (RR)](#round-robin-rr)
-      - [Tradeoffs with RR](#tradeoffs-with-rr)
+  - [9.2. Dispatcher \& Scheduler](#92-dispatcher--scheduler)
+  - [9.3. Basic Scheduling DETAILS](#93-basic-scheduling-details)
+    - [9.3.1. scheduler runs whenever a process changes state](#931-scheduler-runs-whenever-a-process-changes-state)
+    - [9.3.2. Scheduler Goals](#932-scheduler-goals)
+  - [9.4. Basic Scheduling TECHNIQUES](#94-basic-scheduling-techniques)
+    - [9.4.1. FCFS (First Come First Served) / FIFO](#941-fcfs-first-come-first-served--fifo)
+    - [9.4.2. SJF (Shortest Job First)](#942-sjf-shortest-job-first)
+      - [9.4.2.1. Tradeoffs with SJF](#9421-tradeoffs-with-sjf)
+    - [9.4.3. SRTF (Shortest Remaining Time First)](#943-srtf-shortest-remaining-time-first)
+      - [9.4.3.1. Tradeoffs with SRTF](#9431-tradeoffs-with-srtf)
+    - [9.4.4. (RR) Round-Robin](#944-rr-round-robin)
+      - [9.4.4.1. Tradeoffs with RR](#9441-tradeoffs-with-rr)
+- [10. Advanced Scheduling (2023-09-28)](#10-advanced-scheduling-2023-09-28)
+  - [10.1. Prioritizing Special Processes](#101-prioritizing-special-processes)
+    - [10.1.1. Mapping Priority to Integers](#1011-mapping-priority-to-integers)
+    - [10.1.2. Preventing Starvation via Dynamic Priority Changes](#1012-preventing-starvation-via-dynamic-priority-changes)
+    - [10.1.3. Priority Inheritance (ala Priority Inversion)](#1013-priority-inheritance-ala-priority-inversion)
+  - [10.2. Scheduling FOREGROUND vs. BACKGROUND Processes](#102-scheduling-foreground-vs-background-processes)
+    - [10.2.1. How to Prioritize FOREGROUND vs. BACKGROUND Processes](#1021-how-to-prioritize-foreground-vs-background-processes)
+  - [10.3. Multiprocessor Scheduling](#103-multiprocessor-scheduling)
+    - [10.3.1. Symmetric Multiprocessing (SMP) Setup for CPUs](#1031-symmetric-multiprocessing-smp-setup-for-cpus)
+    - [10.3.2. Global (Single) CPU Schedulers](#1032-global-single-cpu-schedulers)
+    - [10.3.3. Per-CPU Schedulers](#1033-per-cpu-schedulers)
+    - [10.3.4. Compromise Between Global \& Per-CPU Schedulers](#1034-compromise-between-global--per-cpu-schedulers)
+    - [10.3.5. Gang/Co-Scheduling](#1035-gangco-scheduling)
+    - [10.3.6. Real-time Scheduling](#1036-real-time-scheduling)
+      - [10.3.6.1. Scheduling in Linux (Digress)](#10361-scheduling-in-linux-digress)
+      - [10.3.6.2. Mapping Soft Real-time Priority to Integers](#10362-mapping-soft-real-time-priority-to-integers)
+    - [10.3.7. How Linux Priority Unifies Soft Real-time \& Normal Processes](#1037-how-linux-priority-unifies-soft-real-time--normal-processes)
+  - [10.4. IFS (Ideal Fair Scheduling)](#104-ifs-ideal-fair-scheduling)
+  - [10.5. CFS (Completely Fair Scheduler)](#105-cfs-completely-fair-scheduler)
+    - [10.5.1. CFS Implemented via Red-Black Trees](#1051-cfs-implemented-via-red-black-trees)
+      - [10.5.1.1. Red-Black Tree Refresher](#10511-red-black-tree-refresher)
 
 
 <!--------------------------------{.gray}------------------------------>
@@ -1827,7 +1848,7 @@ int main(int argc, char* argv[]) {
   - e.g. disk memory
 
 
-## Dispatcher & Scheduler
+## 9.2. Dispatcher & Scheduler
 - **Dispatcher**
   - responsible for context switching between processes
   - low-level mechanism
@@ -1835,15 +1856,15 @@ int main(int argc, char* argv[]) {
   - responsible for deciding which process to run (& only *sometimes* when)
   - high-level policy
 
-## Basic Scheduling DETAILS
-### scheduler runs whenever a process changes state
+## 9.3. Basic Scheduling DETAILS
+### 9.3.1. scheduler runs whenever a process changes state
 - **Non-Preemptible Resources**
   - once a non-preemptible process starts, it runs until completion
   - scheduler only makes a decision when process non-preemptible terminate
 - **Preemptible Resources**
   - preemptive processes/mode allows OS to run scheduler at will (inc. during process runtime)
 
-### Scheduler Goals
+### 9.3.2. Scheduler Goals
 - Minimize response (waiting) time
   - don't have a process waiting too long (or too long to start)
 - Maximize CPU utilization
@@ -1852,8 +1873,8 @@ int main(int argc, char* argv[]) {
 - Fairness
   - attempt to give each process the same percentage of CPU
 
-## Basic Scheduling TECHNIQUES
-### FCFS (First Come First Served) / FIFO
+## 9.4. Basic Scheduling TECHNIQUES
+### 9.4.1. FCFS (First Come First Served) / FIFO
 - most basic scheduler
 - first process arrived gets CPU time
 - new processes are stored in a FIFO queue in arrival order
@@ -1893,13 +1914,13 @@ int main(int argc, char* argv[]) {
 
 > ---
 
-### SJF (Shortest Job First)
+### 9.4.2. SJF (Shortest Job First)
 
 - Always schedules the job with the shortest burst time first
   - For queued processes with the same burst time, the process that arrived first is scheduled first (i.e. [FCFS](#fcfs-first-come-first-served--fifo) for same burst times)
 - Assumes no premeption
 
-#### Tradeoffs with SJF
+#### 9.4.2.1. Tradeoffs with SJF
 - PROS
   - reduces avg. wait time
 - CONS
@@ -1924,14 +1945,14 @@ int main(int argc, char* argv[]) {
 
 > ---
 
-### SRTF (Shortest Remaining Time First)
+### 9.4.3. SRTF (Shortest Remaining Time First)
 
 - SJF **WITH**{.g} preemption
   - currently executing processes can be interrupted by newly arrived, *shorter* processes
   - assumes minimum execution time is 1 unit
   - optimizes avg. waiting time better than [SJF](#sjf-shortest-job-first)
 
-#### Tradeoffs with SRTF
+#### 9.4.3.1. Tradeoffs with SRTF
 - PROS
   - optimizes lowest waiting time (even lower than [SJF](#sjf-shortest-job-first))
 - CONS
@@ -1954,17 +1975,17 @@ int main(int argc, char* argv[]) {
 
 ![](2023-10-02-00-31-46.png)
 
-### Round-Robin (RR)
+### 9.4.4. (RR) Round-Robin
 - OS divides execution into time slices/quanta for each process based on fairness (more important process = larger time slice)
 - circular FIFO queue of FCFS processes (processes that don't finish by the end of their time slice/quantum get re-added to the **back** of the queue)
 
-#### Tradeoffs with RR
+#### 9.4.4.1. Tradeoffs with RR
 - PROS
   - low avg. response time
   - low avg. waiting time
   - fair allocation of CPY
 - CONS
-  - ppor avg. waiting time when jobs have similar lengths
+  - poor avg. waiting time when jobs have similar lengths
   - performance depends on manually set quantum length
     - too high: equivalent to [FCFS](#fcfs-first-come-first-served--fifo)
     - too low: too many context switches (overhead)
@@ -2038,3 +2059,177 @@ int main(int argc, char* argv[]) {
   - ^METRICS WERE SAME AS FCFS W/O PREEMPTIONS!
 
 ![](2023-10-02-01-25-23.png)
+
+
+
+
+
+
+
+
+<!--------------------------------{.gray}------------------------------>
+
+
+
+
+
+
+
+<hr style="border:30px solid #FFFF; margin: 100px 0 100px 0; {.gray}"> </hr>
+
+
+
+
+
+
+<!--------------------------------{.gray}------------------------------>
+<div style="page-break-after: always;"></div>
+
+# 10. Advanced Scheduling (2023-09-28)
+## 10.1. Prioritizing Special Processes
+By assigning each process a priority, we can favor running some processes over others
+- run higher priority processes first
+- for processes of the same priority, run them using [round-robin](#944-round-robin-rr) scheduler
+
+### 10.1.1. Mapping Priority to Integers
+Linux process priorities range from `-20` to `19` (highest -> lowest)
+  - `-20` -- highest priority
+  - `19` -- lowest priority
+
+### 10.1.2. Preventing Starvation via Dynamic Priority Changes
+Having many higher priority processes will mean that lower prioritiy processes will get starved if process priority is static
+  - OS dynamically changes priority to increase priority of old processes that haven't been executed in a long time
+
+### 10.1.3. Priority Inheritance (ala Priority Inversion)
+When a high priority process depends on a low priority, the high priority process can be starved since the lower priority process is unlikely to run; solution: **priority inheritance**
+- when low priority process is a dependency of higher priority processes, the lower priority process can inherit the highest priority\* of the waiting processes & *then revert back to original priority after dependency is complete*
+- \*called **priority inversion** bc priority goes from low->high, then high->low
+- can chain multiple inheritances/dependencies
+
+## 10.2. Scheduling FOREGROUND vs. BACKGROUND Processes
+ - **Foreground processes**
+   - can receive user input
+   - are interactable so they *need good response time*
+ - **Background processes**
+   - {cannot}{.lr} receive user input
+   - may not need good response time, just throughput (amount of data processed)
+
+### 10.2.1. How to Prioritize FOREGROUND vs. BACKGROUND Processes
+e.g. use different queues for foreground vs. background processes
+- use [RR](#944-rr-round-robin) for foreground (bc low response & waiting time)
+- use [FCFS](#941-fcfs-first-come-first-served--fifo) for background (bc minimal context switching so least overhead)
+
+**^REQUIRES SCHEDULING BETWEEN FOREGROUND/BACKGROUND QUEUES!**{.p}
+- e.g. [RR](#944-rr-round-robin) between queues, assign a priority to each queue
+
+## 10.3. Multiprocessor Scheduling
+### 10.3.1. Symmetric Multiprocessing (SMP) Setup for CPUs
+Default setup for CPUs
+- all CPUs are connected to the same physical memory
+- each CPUs has their own private cache (at least the lowest levels)
+
+### 10.3.2. Global (Single) CPU Schedulers
+Keep adding processes while there's available CPUs
+
+- PROS
+  - good CPU utilization
+  - fair to all processes
+- CONS
+  - not scaleable (everything blocks on global scheduler)
+  - poor cache locality (cache lost when process switches between CPUs)
+
+### 10.3.3. Per-CPU Schedulers
+Assign each new process to 1/n available CPUs (with the lowest number of processes)
+
+- PROS
+  - easy to implement
+  - scaleable (no blocking on a resource)
+  - good cache locality (since processes remain on single CPU)
+- CONS
+  - load imbalance between CPUs
+    - some CPUs may have fewer or less intensive processes
+
+### 10.3.4. Compromise Between Global & Per-CPU Schedulers
+- keep a global scheduler that can rebalance per-CPU queues
+  - if a CPU is idle, take over a process from another CPU (work stealing)
+  - retain control over which processes switch CPUs (based on cache requirements)
+  - uses PROCESSOR AFFINITY -- preference of a process to be scheduled on the same core
+
+### 10.3.5. Gang/Co-Scheduling
+- useful for groups of processes that are codependent on each other (i.e. need to be scheduled simulataneously)
+- enables running processes simulataneously as a unit across all CPUs
+- reuqires a global context-switch across all CPUs (as they switch from gang to gang)
+
+### 10.3.6. Real-time Scheduling
+**Real-time requires predictability**
+- imposes time constraints on process completion
+  - HARD real-time system -- required to **guarantee** a task completes within a given timeframe (e.g. audio, autopilot)
+  - SOFT real-time system -- prioritizes critical processes, meeting deadlines is not required but optimized for
+
+#### 10.3.6.1. Scheduling in Linux (Digress)
+- Linux uses FCFS (`SCHED_FIFO`) & RR (`SCHED_RR`) scheduling
+- a multilevel queue scheduler is used for processes with same priority (OS can dynamically adjust priority)
+  - **SOFT REAL-TIME PROCESSES** -- always schedules highest priority proceses first
+  - **NORMAL PROCESSES** -- adjust priority based on aging
+
+#### 10.3.6.2. Mapping Soft Real-time Priority to Integers
+- **SOFT REAL-TIME PROCESS *SCHEDULING POLICY***
+  - 100 static priority levels (0—99) (lowest->highest)
+  - `SCHED_FIFO` or `SCHED_RR` in Linux
+- **NORMAL PROCESS *SCHEDULING POLICY***
+  - default priority is 0;
+  - priority ranges from [-20, 19] (highest->lowest);
+  - processes change/indicate their own priorities via system calls
+    - e.g. `nice`, `sched_setscheduler`
+  - `SCHED_NORMAL` in Linux
+
+
+### 10.3.7. How Linux Priority Unifies Soft Real-time & Normal Processes
+
+![](2023-10-03-00-37-17.png)
+
+## 10.4. IFS (Ideal Fair Scheduling)
+Divide CPU usage equally among every process:
+- assume you can have infinitely small time slice -> if we have $n$ processes, each runs at $1/n$ rate
+
+38:23 ifs scheduling example
+
+e.g. consider the following process info:
+
+| Process | Arrival Time | Burst Time |
+| ------- | ------------ | ---------- |
+| $P_1$   | 0            | 8          |
+| $P_2$   | 0            | 4          |
+| $P_3$   | 0            | 16         |
+| $P_4$   | 0            | 4          |
+
+If each box represents the time units spend executing, then each vertical slice can execute 4 time units:
+![](2023-10-03-00-25-50.png)
+
+- PROS
+  - fairest policy (every process gets equal amount of CPU time)
+  - high response time
+- CONS
+  - impractical bc too many context switches
+  - requires constantly scanning all processes ($O(N)$)
+
+## 10.5. CFS (Completely Fair Scheduler)
+Tries to model ideal fairness.
+- For each runnable process, assign it a assign it a "virtual runtime"
+  - At each scheduling point where the process runs for time $t$
+  - Increase the virtual runtime by $t \dot weight$ (based on priority)
+- Virtual runtime for each process monotonically (i.e. always) increases
+  - Scheduler selects the process based on the lowest virtual runtime
+    - Compute its dynamic time slice based on the IFS
+- If the time slice for a process ends before it finishes running, the process is repeated starting off from that point (i.e. not left hanging)
+
+### 10.5.1. CFS Implemented via Red-Black Trees
+- CFS uses a red-black tree with nanosecond granularity, so it doesn't need to guess the interactivity of a process
+- CFS tends to favour I/O bound processes by default
+  - Small CPU bursts translate to a low virtual runtime
+  - It will get a larger time slice, in order to catch up to the ideal
+
+#### 10.5.1.1. Red-Black Tree Refresher
+- A red-black tree is a self-balancing binary search tree
+  - Keyed by virtual runtime
+    - $O(lgN)$ for: insert, delete, update, find minimum
