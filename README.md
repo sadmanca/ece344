@@ -136,6 +136,19 @@
   - [10.5. CFS (Completely Fair Scheduler)](#105-cfs-completely-fair-scheduler)
     - [10.5.1. CFS Implemented via Red-Black Trees](#1051-cfs-implemented-via-red-black-trees)
       - [10.5.1.1. Red-Black Tree Refresher](#10511-red-black-tree-refresher)
+- [11. Virtual Memory (2023-10-03)](#11-virtual-memory-2023-10-03)
+  - [11.1. Virtual Memory Requirements](#111-virtual-memory-requirements)
+    - [11.1.1. Recall memory is byte addressable](#1111-recall-memory-is-byte-addressable)
+  - [11.2. Segmentation/Segments are Coarse Grained](#112-segmentationsegments-are-coarse-grained)
+    - [11.2.1. Segmentation Details](#1121-segmentation-details)
+  - [11.3. First Insight: Divide Memory into Fixed-Sized Chunks](#113-first-insight-divide-memory-into-fixed-sized-chunks)
+  - [11.4. Memory Management Unit (MMU)](#114-memory-management-unit-mmu)
+  - [11.5. Why Not To Use All 64 Virtual Address Bits](#115-why-not-to-use-all-64-virtual-address-bits)
+  - [11.6. Page Table](#116-page-table)
+    - [11.6.1. Page Table Entry (PTE)](#1161-page-table-entry-pte)
+  - [11.7. Each Process Gets Its Own Page Table](#117-each-process-gets-its-own-page-table)
+    - [11.7.1. `vfork()`](#1171-vfork)
+  - [11.8. Using Pages for Memory Translation](#118-using-pages-for-memory-translation)
 
 
 <!--------------------------------{.gray}------------------------------>
@@ -2233,3 +2246,145 @@ Tries to model ideal fairness.
 - A red-black tree is a self-balancing binary search tree
   - Keyed by virtual runtime
     - $O(lgN)$ for: insert, delete, update, find minimum
+
+
+
+
+
+
+
+
+
+<!--------------------------------{.gray}------------------------------>
+
+
+
+
+
+
+
+<hr style="border:30px solid #FFFF; margin: 100px 0 100px 0; {.gray}"> </hr>
+
+
+
+
+
+
+<!--------------------------------{.gray}------------------------------>
+<div style="page-break-after: always;"></div>
+
+# 11. Virtual Memory (2023-10-03)
+## 11.1. Virtual Memory Requirements
+- Multiple processes must be able to co-exist
+- Processes are not aware they are sharing physical memory
+- Processes cannot access each others data (unless allowed explicitly)
+- Performance close to using physical memory
+- Limit the amount of fragmentation (wasted memory)
+
+### 11.1.1. Recall memory is byte addressable
+- Smallest unit we can use to address memory is 1 byte
+  - can read/write 1 byte at a time at minimum
+- Each "address" is similar to an index of an array
+
+## 11.2. Segmentation/Segments are Coarse Grained
+- Divide the virtual address space into segments for: code, data, stack, and heap
+  - Note: this looks like an ELF file, large sections of memory with permissions
+  - No longer used in modern OS
+- Each segment is a variable size, and can be dynamically resized
+- Segments can be large and very costly to relocate
+  - It also leads to fragmentation (gaps of unused memory)
+
+### 11.2.1. Segmentation Details
+Each segment contains a: base, limit, and permissions
+- You get a physical address by using: `segment selector:offset`
+
+MMU checks that your offset is within the limit (size)
+- If it is, it calculates base + offset, and does permission checks
+- Otherwise, it's a segmentation fault
+
+e.g. `0x1:0xFF` with segment `0x1` base = `0x2000`, limit = `0x1FF`
+- Translates to `0x20FF`
+- Note: Linux sets every base to 0, and limit to the maximum amount
+
+## 11.3. First Insight: Divide Memory into Fixed-Sized Chunks
+```mermaid
+graph LR
+	1["virtual block"] --> 2("physical block")
+```
+
+## 11.4. Memory Management Unit (MMU)
+- Maps virtual address to physical address
+  - Also checks permissions
+- One technique is to divide memory up into fixed-size pages (typically 4096 bytes)
+  - A page in virtual memory is called a page
+  - A page in physical memory is called a frame
+
+## 11.5. Why Not To Use All 64 Virtual Address Bits
+- CPUs may have different levels of virtual addresses you can use
+  - Implementation ideas are the same
+- We'll assume a 39 bit virtual address space used by RISC-V and other architectures
+  - Allows for 512 GiB of addressable memory (called Sv39)
+- Implemented with a page table indexed by Virtual Page Number (VPN)
+  - Looks up the Physical Page Number (PPN)
+
+## 11.6. Page Table
+Translates virtual to physical addresses:
+
+![Alt text](image.png)
+
+### 11.6.1. Page Table Entry (PTE)
+Page Table Entry (PTE) also stores flags in the lower bits:
+
+![Alt text](image-1.png)
+
+e.g. Considering the following page table:
+
+| VPN | PPN |
+| --- | --- |
+| 0x0 | 0x1 |
+| 0x1 | 0x4 |
+| 0x2 | 0x3 |
+| 0x3 | 0x7 |
+
+We would get the following virtual-->physical address translations:
+
+| ...                   |
+| --------------------- |
+| `0x0AB0` --> `0x1AB0` |
+| `0x1FA0` --> `0x4FA0` |
+| `0x2884` --> `0x3884` |
+| `0x32D0` --> `0x72D0` |
+
+***Q:*** Assume you have a 8-bit virtual address, 10-bit physical address, and each page is 64 bytes. {.lr}
+***Q: a)*** How many virtual pages are there? {.lr}
+> ***A:*** $\frac{2^8}{2^6} = 4$ {.lg}
+
+***Q: b)*** How many physical pages are there? {.lr}
+> ***A:*** $\frac{2^{10}}{2^6} = 16$ {.lg}
+
+***Q: c)*** How many entries are in the page table? {.lr}
+> ***A:*** $4$ {.lg}
+
+***Q: d)*** Given the page table is `[0x2, 0x5, 0x1, 0x8]`, what's the physical address of `0xF1`? {.lr}
+> ***A:*** `0x231` {.lg}
+
+<!-- ADD EXPLANATIONS FROM VIDEO -- 45:00 -->
+
+## 11.7. Each Process Gets Its Own Page Table
+- When you `fork()` a process, it will copy the page table from the parent
+   -  Turn off the write permission so the kernel can implement copy-on-write
+- Problem is there are $\mathsf{2^{27}}$ entries in the page table, each one is 8 bytes
+  - means the page table would be 1 GiB
+- Note that RISC-V translates a 39-bit virtual to a 56-bit physical address
+  - It has 10 bits to spare in the PTE and could expand
+  - Page size is 4096 bytes (size of offset field)
+
+### 11.7.1. `vfork()`
+Shares all memory with the parent (means less overhead since page tables aren't copied)
+- undefined behavior to modify anything
+- only used in very performance sensitive programs
+
+## 11.8. Using Pages for Memory Translation
+- Divide memory into blocks, so we only have to translate once per block
+- Use page tables (array of PTEs) to access the PPN (and flags)
+- New problem: these page tables are always huge!
