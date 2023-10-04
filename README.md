@@ -149,6 +149,16 @@
   - [11.7. Each Process Gets Its Own Page Table](#117-each-process-gets-its-own-page-table)
     - [11.7.1. `vfork()`](#1171-vfork)
   - [11.8. Using Pages for Memory Translation](#118-using-pages-for-memory-translation)
+- [12. Page Tables (2023-10-05)](#12-page-tables-2023-10-05)
+  - [Reducing Page Table Memory Wastage](#reducing-page-table-memory-wastage)
+    - [Fit Page Table on a Page](#fit-page-table-on-a-page)
+    - [Multi-Level Page Tables (Save Space for Sparse Allocations)](#multi-level-page-tables-save-space-for-sparse-allocations)
+  - [Page Allocation (Uses a Free List)](#page-allocation-uses-a-free-list)
+    - [Page Allocation USING A PAGE FOR EACH SMALLER PAGE TABLE](#page-allocation-using-a-page-for-each-smaller-page-table)
+    - [ANALOGY: Smaller Page Tables \<==\> Arrays](#analogy-smaller-page-tables--arrays)
+  - [PRACTICE](#practice)
+    - [CONSIDER: Adding A Single Level](#consider-adding-a-single-level)
+    - [Translating `3FFFF008` with 2 Page Tables](#translating-3ffff008-with-2-page-tables)
 
 
 <!--------------------------------{.gray}------------------------------>
@@ -2388,3 +2398,113 @@ Shares all memory with the parent (means less overhead since page tables aren't 
 - Divide memory into blocks, so we only have to translate once per block
 - Use page tables (array of PTEs) to access the PPN (and flags)
 - New problem: these page tables are always huge!
+
+
+
+
+
+
+
+
+
+<!--------------------------------{.gray}------------------------------>
+
+
+
+
+
+
+
+<hr style="border:30px solid #FFFF; margin: 100px 0 100px 0; {.gray}"> </hr>
+
+
+
+
+
+
+<!--------------------------------{.gray}------------------------------>
+<div style="page-break-after: always;"></div>
+
+# 12. Page Tables (2023-10-05)
+## Reducing Page Table Memory Wastage
+- We left off talking about [how large page tables can get & how `fork()`-ing can cause unnecessary duplications of large volumes of data](#each
+)
+- most programs don't use all virtual memory space; how can we take advantage? {.lr}
+
+### Fit Page Table on a Page
+
+<!-- 5:00 img (different from b4!) -->
+
+### Multi-Level Page Tables (Save Space for Sparse Allocations)
+
+<!-- 7:00 -->
+
+## Page Allocation (Uses a Free List)
+Given physical pages, the operating system maintains a free list (linked list)
+- The unused pages themselves contain the `next` pointer in the free list
+  - Physical memory gets initialized at boot
+- Linked list setup allows for fast addition/removal of pages
+  - To allocate a page, you remove it from the free list
+  - To deallocate a page you add it back to the free list
+
+### Page Allocation USING A PAGE FOR EACH SMALLER PAGE TABLE
+- $512 = 2^9 \text{entries}$ of $8 = 2^3 \text{bytes} = 4096 \text{bytes}$
+- `PTE` for `L(N)` points to the page table for the next lowest level `L(N-1)`
+- Follow page tables until `L0` (which contains `PPN`)
+
+### ANALOGY: Smaller Page Tables <==> Arrays
+Instead of...
+```c
+int page_table[512] // What's the size of this?
+/* or */
+x = page_table[2]; // What's the offset of index 2?
+```
+...we have...
+```c
+PTE page_table[512]
+/* where: */
+sizeof(page_table) == PAGE_SIZE
+/* and */
+sizeof(page_table) = number of entries * sizeof(PTE)
+```
+
+## PRACTICE
+### CONSIDER: Adding A Single Level
+Assume our process uses just one virtual address at `0x3FFFF008`
+```c
+   0x3FFFF008
+// =
+   0b11_1111_1111_1111_1111_0000_0000_1000
+// =
+   0b111111111_111111111_000000001000
+```
+
+If we consider a 30-bit virtual address with a page size of 4096 bytes:
+- ***A:*** need a 2 MiB page table if we only had one $2^{18} \times 2^{3}$ {.lg}
+
+
+If we instead have a 4 KiB L1 page table ($2^9 \times 2^{3}$) and a 4 KiB L0 page table
+- ***A:*** Total of 8 KiB instead of 2 MiB {.lg}
+
+NOTE: worst case if we used all virtual addresses we would consume 2 MiB + 4 KiB {.p}
+
+<!-- DIAGRAM ILLUSTRATING SCENARIO -->
+
+### Translating `3FFFF008` with 2 Page Tables
+Consider the L1 table with the entry...
+
+| **Index** | **PPN** |
+| --------- | ------- |
+| 511       | `0x8`   |
+
+...and the L0 table located at `0x8000` with the entry:
+
+| **Index** | **PPN**  |
+| --------- | -------- |
+| 511       | `0xCAFE` |
+
+> ***A:*** final translated physical address would be: `0xCAFE008` {.lg}
+
+<!-- EXAMPLE CODE IMPLEMENTATION -->
+
+<!-- DIAGRAM ILLUSTRATING CONCEPT -->
