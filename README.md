@@ -150,16 +150,30 @@
     - [11.7.1. `vfork()`](#1171-vfork)
   - [11.8. Using Pages for Memory Translation](#118-using-pages-for-memory-translation)
 - [12. Page Tables (2023-10-05)](#12-page-tables-2023-10-05)
-  - [Reducing Page Table Memory Wastage](#reducing-page-table-memory-wastage)
-    - [Fit Page Table on a Page](#fit-page-table-on-a-page)
-    - [Multi-Level Page Tables (Save Space for Sparse Allocations)](#multi-level-page-tables-save-space-for-sparse-allocations)
-  - [Page Allocation (Uses a Free List)](#page-allocation-uses-a-free-list)
-    - [Page Allocation USING A PAGE FOR EACH SMALLER PAGE TABLE](#page-allocation-using-a-page-for-each-smaller-page-table)
-    - [ANALOGY: Smaller Page Tables \<==\> Arrays](#analogy-smaller-page-tables--arrays)
-  - [PRACTICE](#practice)
-    - [CONSIDER: Adding A Single Level](#consider-adding-a-single-level)
-    - [Translating `3FFFF008` with 2 Page Tables](#translating-3ffff008-with-2-page-tables)
-  - [EXAMPLE CODE IMPLEMENTATION](#example-code-implementation)
+  - [12.1. Reducing Page Table Memory Wastage](#121-reducing-page-table-memory-wastage)
+    - [12.1.1. Fit Page Table on a Page](#1211-fit-page-table-on-a-page)
+    - [12.1.2. Multi-Level Page Tables (Save Space for Sparse Allocations)](#1212-multi-level-page-tables-save-space-for-sparse-allocations)
+  - [12.2. Page Allocation (Uses a Free List)](#122-page-allocation-uses-a-free-list)
+    - [12.2.1. Page Allocation USING A PAGE FOR EACH SMALLER PAGE TABLE](#1221-page-allocation-using-a-page-for-each-smaller-page-table)
+    - [12.2.2. ANALOGY: Smaller Page Tables \<==\> Arrays](#1222-analogy-smaller-page-tables--arrays)
+  - [12.3. PRACTICE](#123-practice)
+    - [12.3.1. CONSIDER: Adding A Single Level](#1231-consider-adding-a-single-level)
+    - [12.3.2. Translating `3FFFF008` with 2 Page Tables](#1232-translating-3ffff008-with-2-page-tables)
+  - [12.4. EXAMPLE CODE IMPLEMENTATION](#124-example-code-implementation)
+- [13. Page Table Implementation (2023-10-06)](#13-page-table-implementation-2023-10-06)
+  - [13.1. ALIGNMENT: Memory Eventually Lines Up With Byte 0](#131-alignment-memory-eventually-lines-up-with-byte-0)
+  - [13.2. PRACTICE: How Many Page Tables Do We Need?](#132-practice-how-many-page-tables-do-we-need)
+  - [13.3. PRACTICE: How Many Levels Do I Need?](#133-practice-how-many-levels-do-i-need)
+  - [13.4. Speeding Up Page Table Implementation via Caching](#134-speeding-up-page-table-implementation-via-caching)
+    - [13.4.1. Using the Page Tables for Every Memory Access is Slow](#1341-using-the-page-tables-for-every-memory-access-is-slow)
+    - [13.4.2. Translation Look-Aside Buffer (TLB)](#1342-translation-look-aside-buffer-tlb)
+      - [13.4.2.1. Effective Access Time (EAT)](#13421-effective-access-time-eat)
+      - [13.4.2.2. Context Switches Require Handling the TLB](#13422-context-switches-require-handling-the-tlb)
+  - [13.5. Using `sbrk()` for Userspace Allocation](#135-using-sbrk-for-userspace-allocation)
+  - [13.6. Kernel Initializes the Process' Address Space](#136-kernel-initializes-the-process-address-space)
+  - [13.7. Kernel Can Provide Fixed Virtual Addresses](#137-kernel-can-provide-fixed-virtual-addresses)
+    - [13.7.1. Page Faults Allow the Operating System to Handle Virtual Memory](#1371-page-faults-allow-the-operating-system-to-handle-virtual-memory)
+  - [13.8. SUMMARY](#138-summary)
 
 
 <!--------------------------------{.gray}------------------------------>
@@ -2384,7 +2398,7 @@ We would get the following virtual-->physical address translations:
 ## 11.7. Each Process Gets Its Own Page Table
 - When you `fork()` a process, it will copy the page table from the parent
    -  Turn off the write permission so the kernel can implement copy-on-write
-- Problem is there are $\mathsf{2^{27}}$ entries in the page table, each one is 8 bytes
+- Problem is there are $2^{27}}$ entries in the page table, each one is 8 bytes
   - means the page table would be 1 GiB
 - Note that RISC-V translates a 39-bit virtual to a 56-bit physical address
   - It has 10 bits to spare in the PTE and could expand
@@ -2427,20 +2441,22 @@ Shares all memory with the parent (means less overhead since page tables aren't 
 <div style="page-break-after: always;"></div>
 
 # 12. Page Tables (2023-10-05)
-## Reducing Page Table Memory Wastage
+## 12.1. Reducing Page Table Memory Wastage
 - We left off talking about [how large page tables can get & how `fork()`-ing can cause unnecessary duplications of large volumes of data](#each
 )
 - most programs don't use all virtual memory space; how can we take advantage? {.lr}
 
-### Fit Page Table on a Page
+### 12.1.1. Fit Page Table on a Page
 
 <!-- 5:00 img (different from b4!) -->
 
-### Multi-Level Page Tables (Save Space for Sparse Allocations)
+### 12.1.2. Multi-Level Page Tables (Save Space for Sparse Allocations)
 
 <!-- 7:00 -->
 
-## Page Allocation (Uses a Free List)
+- Processes Use A Register Like `satp` to Set the Root Page Table (see diagram)
+
+## 12.2. Page Allocation (Uses a Free List)
 Given physical pages, the operating system maintains a free list (linked list)
 - The unused pages themselves contain the `next` pointer in the free list
   - Physical memory gets initialized at boot
@@ -2448,12 +2464,12 @@ Given physical pages, the operating system maintains a free list (linked list)
   - To allocate a page, you remove it from the free list
   - To deallocate a page you add it back to the free list
 
-### Page Allocation USING A PAGE FOR EACH SMALLER PAGE TABLE
+### 12.2.1. Page Allocation USING A PAGE FOR EACH SMALLER PAGE TABLE
 - $512 = 2^9 \text{entries}$ of $8 = 2^3 \text{bytes} = 4096 \text{bytes}$
 - `PTE` for `L(N)` points to the page table for the next lowest level `L(N-1)`
 - Follow page tables until `L0` (which contains `PPN`)
 
-### ANALOGY: Smaller Page Tables <==> Arrays
+### 12.2.2. ANALOGY: Smaller Page Tables <==> Arrays
 Instead of...
 ```c
 int page_table[512] // What's the size of this?
@@ -2469,8 +2485,10 @@ sizeof(page_table) == PAGE_SIZE
 sizeof(page_table) = number of entries * sizeof(PTE)
 ```
 
-## PRACTICE
-### CONSIDER: Adding A Single Level
+<!-- WHITEBOARD EXAMPLE -->
+
+## 12.3. PRACTICE
+### 12.3.1. CONSIDER: Adding A Single Level
 Assume our process uses just one virtual address at `0x3FFFF008`
 ```c
    0x3FFFF008
@@ -2491,7 +2509,7 @@ NOTE: worst case if we used all virtual addresses we would consume 2 MiB + 4 KiB
 
 <!-- DIAGRAM ILLUSTRATING SCENARIO -->
 
-### Translating `3FFFF008` with 2 Page Tables
+### 12.3.2. Translating `3FFFF008` with 2 Page Tables
 Consider the L1 table with the entry...
 
 | **Index** | **PPN** |
@@ -2506,7 +2524,7 @@ Consider the L1 table with the entry...
 
 > ***A:*** final translated physical address would be: `0xCAFE008` {.lg}
 
-## EXAMPLE CODE IMPLEMENTATION
+## 12.4. EXAMPLE CODE IMPLEMENTATION
 ```c
 // mmusim.c
 
@@ -2606,3 +2624,131 @@ int main() {
 ```
 
 <!-- DIAGRAM ILLUSTRATING CONCEPT -->
+
+
+
+
+
+
+
+
+
+<!--------------------------------{.gray}------------------------------>
+
+
+
+
+
+
+
+<hr style="border:30px solid #FFFF; margin: 100px 0 100px 0; {.gray}"> </hr>
+
+
+
+
+
+
+<!--------------------------------{.gray}------------------------------>
+<div style="page-break-after: always;"></div>
+
+# 13. Page Table Implementation (2023-10-06)
+## 13.1. ALIGNMENT: Memory Eventually Lines Up With Byte 0
+- If pages are **`4096` byte aligned** in memory, this means pages always start when the lower 12 bits are zero, in computing we like alignment.
+- If a page started at address `0x7C00`, its last byte would be at address `0x8BFF`
+  - Instead, a page would start at `0x7000` and end at `0x7FFF`
+
+***Q:*** Is address `0xEC` 8 byte aligned? {.lr}
+
+## 13.2. PRACTICE: How Many Page Tables Do We Need?
+***Q:*** assume our program uses 512 pages; ***a)*** What's the minimum number of page tables we need? {.lr}
+> ***A:*** 1 {.lg}
+
+***Q: b)*** What's the maximum number of page tables? {.lr}
+> ***A:*** ? {.lg}
+
+<!-- WHITEBOARDING -->
+
+## 13.3. PRACTICE: How Many Levels Do I Need?
+Assume we have a 32-bit virtual address with a page size of 4096 bytes and a PTE size of 4 bytes.
+
+Want each page table to fit into a single page
+- Find the number of PTEs we could have in a page ($2^{10}$)
+  - ${log_2(\text{\# PTEs\ per\ Page})}$ is the number of bits to index a page table
+- $\text{# of levels} = \frac{\text{(VIRTUAL bits) - (OFFSET bits)}}{INDEX bits}$
+
+<!-- WHITEBOARD EXAMPLE -->
+
+## 13.4. Speeding Up Page Table Implementation via Caching
+### 13.4.1. Using the Page Tables for Every Memory Access is Slow
+- We need to follow pointers across multiple levels of page tables!
+- We'll likely access the same page multiple times (close to the first access time)
+- A process may only need a few VPN $\rightarrow$ PPN mappings at a time
+- Classic CS solution: **caching**
+
+### 13.4.2. Translation Look-Aside Buffer (TLB)
+A TLB Caches PTEs
+
+<!-- tlb.eps ILLUSTRATION -->
+
+#### 13.4.2.1. Effective Access Time (EAT)
+Assume a single page table (there's only one additional memory access in the page table)
+
+$$\begin{aligned}
+  & \text{TLB Hit Time} = \text{TLB Search} &&+ \text{Mem} \\
+  & \text{TLB Miss Time} = \text{TLB Search} &&+ 2 \times \text{Mem}
+\end{aligned}$$
+
+$$\begin{aligned}
+  \text{EAT} = &\ &&(\alpha) \times (\text{TLB Hit Time}) \\
+  &+ &&(1 - \alpha) \times (\text{TLB Miss Time})
+\end{aligned}$$
+
+***Q:*** if $\alpha = 0.8$, $\text{TLB Search} = 10\ ns$, & memory accesses take `100 ns`, calculate EAT. {.lr}
+- ***A:*** {.lg}
+  $$\begin{aligned}
+    \text{EAT}
+    &= 0.8 \times \text{110 ns} + 0.2 \times \text{210 ns} \\
+    &= \text{130 ns}
+  \end{aligned}$$
+
+#### 13.4.2.2. Context Switches Require Handling the TLB
+You can either flush the cache, or attach a process ID to the TLB.
+
+- Most implementations just flush the TLB
+  - RISC-V uses a `sfence.vma` instruction to flush the TLB
+  - On x86 loading the base page table will also flush the TLB
+
+```c
+// test-tlb.c
+```
+
+<!-- SEE NOTES IN GITLAB .TEX THATS NOT IN VIDEO! -->
+
+## 13.5. Using `sbrk()` for Userspace Allocation
+This call grows or shrinks your heap (the stack has a set limit)
+- For growing, it'll grab pages from the free list to fulfill the request
+  - The kernel sets `PTE_V` (valid) and other permissions
+- In memory allocators this is difficult to use, you'll rarely shrink the heap
+  - It'll stay claimed by the process, and the kernel cannot free pages
+
+- Memory allocators use `mmap` to bring in large blocks of virtual memory
+
+## 13.6. Kernel Initializes the Process' Address Space
+<!-- TABLE ILLUSTRATION FROM SLIDE -->
+
+## 13.7. Kernel Can Provide Fixed Virtual Addresses
+Allows the process to access kernel data without using a system call
+- e.g. `clock_gettime` does not do a system call; instead it just reads from a virtual address mapped by the kernel
+
+### 13.7.1. Page Faults Allow the Operating System to Handle Virtual Memory
+- Page faults are a type of exception for virtual memory access
+  - Generated if it cannot find a translation, or permission check fails
+- This allows the operating system to handle it however it wants
+  - e.g. lazily allocate pages, implement copy-on-write, or swap to disk
+
+## 13.8. SUMMARY
+The MMU is the hardware that uses page tables, which may:
+- Be a single large table (wasteful, even for 32-bit machines)
+- Use the kernel allocated pages from a free list
+- Be a multi-level to save space for sparse allocations
+- Use a TLB to speed up memory accesses
