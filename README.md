@@ -149,6 +149,17 @@
   - [11.7. Each Process Gets Its Own Page Table](#117-each-process-gets-its-own-page-table)
     - [11.7.1. `vfork()`](#1171-vfork)
   - [11.8. Using Pages for Memory Translation](#118-using-pages-for-memory-translation)
+- [12. Page Tables (2023-10-05)](#12-page-tables-2023-10-05)
+  - [Reducing Page Table Memory Wastage](#reducing-page-table-memory-wastage)
+    - [Fit Page Table on a Page](#fit-page-table-on-a-page)
+    - [Multi-Level Page Tables (Save Space for Sparse Allocations)](#multi-level-page-tables-save-space-for-sparse-allocations)
+  - [Page Allocation (Uses a Free List)](#page-allocation-uses-a-free-list)
+    - [Page Allocation USING A PAGE FOR EACH SMALLER PAGE TABLE](#page-allocation-using-a-page-for-each-smaller-page-table)
+    - [ANALOGY: Smaller Page Tables \<==\> Arrays](#analogy-smaller-page-tables--arrays)
+  - [PRACTICE](#practice)
+    - [CONSIDER: Adding A Single Level](#consider-adding-a-single-level)
+    - [Translating `3FFFF008` with 2 Page Tables](#translating-3ffff008-with-2-page-tables)
+  - [EXAMPLE CODE IMPLEMENTATION](#example-code-implementation)
 
 
 <!--------------------------------{.gray}------------------------------>
@@ -2388,3 +2399,210 @@ Shares all memory with the parent (means less overhead since page tables aren't 
 - Divide memory into blocks, so we only have to translate once per block
 - Use page tables (array of PTEs) to access the PPN (and flags)
 - New problem: these page tables are always huge!
+
+
+
+
+
+
+
+
+
+<!--------------------------------{.gray}------------------------------>
+
+
+
+
+
+
+
+<hr style="border:30px solid #FFFF; margin: 100px 0 100px 0; {.gray}"> </hr>
+
+
+
+
+
+
+<!--------------------------------{.gray}------------------------------>
+<div style="page-break-after: always;"></div>
+
+# 12. Page Tables (2023-10-05)
+## Reducing Page Table Memory Wastage
+- We left off talking about [how large page tables can get & how `fork()`-ing can cause unnecessary duplications of large volumes of data](#each
+)
+- most programs don't use all virtual memory space; how can we take advantage? {.lr}
+
+### Fit Page Table on a Page
+
+<!-- 5:00 img (different from b4!) -->
+
+### Multi-Level Page Tables (Save Space for Sparse Allocations)
+
+<!-- 7:00 -->
+
+## Page Allocation (Uses a Free List)
+Given physical pages, the operating system maintains a free list (linked list)
+- The unused pages themselves contain the `next` pointer in the free list
+  - Physical memory gets initialized at boot
+- Linked list setup allows for fast addition/removal of pages
+  - To allocate a page, you remove it from the free list
+  - To deallocate a page you add it back to the free list
+
+### Page Allocation USING A PAGE FOR EACH SMALLER PAGE TABLE
+- $512 = 2^9 \text{entries}$ of $8 = 2^3 \text{bytes} = 4096 \text{bytes}$
+- `PTE` for `L(N)` points to the page table for the next lowest level `L(N-1)`
+- Follow page tables until `L0` (which contains `PPN`)
+
+### ANALOGY: Smaller Page Tables <==> Arrays
+Instead of...
+```c
+int page_table[512] // What's the size of this?
+/* or */
+x = page_table[2]; // What's the offset of index 2?
+```
+...we have...
+```c
+PTE page_table[512]
+/* where: */
+sizeof(page_table) == PAGE_SIZE
+/* and */
+sizeof(page_table) = number of entries * sizeof(PTE)
+```
+
+## PRACTICE
+### CONSIDER: Adding A Single Level
+Assume our process uses just one virtual address at `0x3FFFF008`
+```c
+   0x3FFFF008
+// =
+   0b11_1111_1111_1111_1111_0000_0000_1000
+// =
+   0b111111111_111111111_000000001000
+```
+
+If we consider a 30-bit virtual address with a page size of 4096 bytes:
+- ***A:*** need a 2 MiB page table if we only had one $2^{18} \times 2^{3}$ {.lg}
+
+
+If we instead have a 4 KiB L1 page table ($2^9 \times 2^{3}$) and a 4 KiB L0 page table
+- ***A:*** Total of 8 KiB instead of 2 MiB {.lg}
+
+NOTE: worst case if we used all virtual addresses we would consume 2 MiB + 4 KiB {.p}
+
+<!-- DIAGRAM ILLUSTRATING SCENARIO -->
+
+### Translating `3FFFF008` with 2 Page Tables
+Consider the L1 table with the entry...
+
+| **Index** | **PPN** |
+| --------- | ------- |
+| 511       | `0x8`   |
+
+...and the L0 table located at `0x8000` with the entry:
+
+| **Index** | **PPN**  |
+| --------- | -------- |
+| 511       | `0xCAFE` |
+
+> ***A:*** final translated physical address would be: `0xCAFE008` {.lg}
+
+## EXAMPLE CODE IMPLEMENTATION
+```c
+// mmusim.c
+
+#include <assert.h>
+#include <errno.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/mman.h>
+#include <unistd.h>
+
+#define PAGE_SIZE 4096
+
+#define LEVELS 3
+#define PTE_VALID (1 << 0)
+
+static uint64_t* root_page_table = NULL;
+
+static uint64_t* allocate_page_table() {
+    void* page = mmap(NULL, PAGE_SIZE, PROT_READ|PROT_WRITE, MAP_ANONYMOUS|MAP_PRIVATE, -1, 0);
+    if (page == MAP_FAILED) {
+        int err = errno;
+        perror("mmap");
+        exit(err);
+    }
+    return page;
+}
+
+static void deallocate_page_table(void* page) {
+    if (munmap(page, PAGE_SIZE) == -1) {
+        int err = errno;
+        perror("munmap");
+        exit(err);
+    }
+}
+
+static uint64_t mmu(uint64_t virtual_address) {
+    uint64_t* page_table = root_page_table;
+    uint64_t va = (uint64_t) virtual_address;
+    for (int i = LEVELS - 1; i >= 0; --i) {
+        uint8_t start_bit = 9 * i + 12;
+        uint64_t mask = (uint64_t) 0x1FF << start_bit;
+        uint16_t index = (mask & va) >> start_bit;
+
+        uint64_t pte = page_table[index];
+        if (!(pte & PTE_VALID)) {
+            printf("0x%lX: page fault\n", va);
+            return 0;
+        }
+
+        if (i != 0) {
+            page_table = (uint64_t*) ((pte >> 10) << 12);
+            continue;
+        }
+
+        uint64_t pa = ((pte & ~0x3FF) << 2) | (va & 0xFFF);
+        printf("0x%lX: 0x%lX\n", va, pa);
+        return pa;
+    }
+    __builtin_unreachable();
+}
+
+
+uint64_t pte_from_ppn(uint64_t ppn) {
+    uint64_t pte = ppn << 10;
+    pte |= PTE_VALID;
+    return pte;
+}
+
+uint64_t pte_from_page_table(uint64_t* page_table) {
+    return pte_from_ppn(((uint64_t) page_table) >> 12);
+}
+
+int main() {
+    assert(sysconf(_SC_PAGE_SIZE) == PAGE_SIZE);
+
+    uint64_t* l2_page_table_1 = allocate_page_table();
+
+    root_page_table = l2_page_table_1;
+
+    uint64_t* l1_page_table_1 = allocate_page_table();
+    l2_page_table_1[0] = pte_from_page_table(l1_page_table_1);
+
+    uint64_t* l0_page_table_1 = allocate_page_table();
+    l1_page_table_1[5] = pte_from_page_table(l0_page_table_1);
+
+    l0_page_table_1[188] = pte_from_ppn(0xCAFE);
+
+    mmu(0xABCDEF);
+    mmu(0x1ABCDEF);
+
+    deallocate_page_table(root_page_table);
+    root_page_table = NULL;
+
+    return 0;
+}
+```
+
+<!-- DIAGRAM ILLUSTRATING CONCEPT -->
