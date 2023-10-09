@@ -144,20 +144,23 @@
   - [11.3. First Insight: Divide Memory into Fixed-Sized Chunks](#113-first-insight-divide-memory-into-fixed-sized-chunks)
   - [11.4. Memory Management Unit (MMU)](#114-memory-management-unit-mmu)
   - [11.5. Why Not To Use All 64 Virtual Address Bits](#115-why-not-to-use-all-64-virtual-address-bits)
+    - [11.5.1. VPN (Virtual Page Number) \& PPN (Physical Page Number)](#1151-vpn-virtual-page-number--ppn-physical-page-number)
   - [11.6. Page Table](#116-page-table)
     - [11.6.1. Page Table Entry (PTE)](#1161-page-table-entry-pte)
-  - [11.7. Each Process Gets Its Own Page Table](#117-each-process-gets-its-own-page-table)
-    - [11.7.1. `vfork()`](#1171-vfork)
-  - [11.8. Using Pages for Memory Translation](#118-using-pages-for-memory-translation)
+  - [11.7. PRACTICE](#117-practice)
+  - [11.8. Each Process Gets Its Own Page Table](#118-each-process-gets-its-own-page-table)
+    - [11.8.1. `vfork()`](#1181-vfork)
+  - [11.9. Using Pages for Memory Translation](#119-using-pages-for-memory-translation)
 - [12. Page Tables (2023-10-05)](#12-page-tables-2023-10-05)
   - [12.1. Reducing Page Table Memory Wastage](#121-reducing-page-table-memory-wastage)
     - [12.1.1. Fit Page Table on a Page](#1211-fit-page-table-on-a-page)
     - [12.1.2. Multi-Level Page Tables (Save Space for Sparse Allocations)](#1212-multi-level-page-tables-save-space-for-sparse-allocations)
   - [12.2. Page Allocation (Uses a Free List)](#122-page-allocation-uses-a-free-list)
-    - [12.2.1. Page Allocation USING A PAGE FOR EACH SMALLER PAGE TABLE](#1221-page-allocation-using-a-page-for-each-smaller-page-table)
-    - [12.2.2. ANALOGY: Smaller Page Tables \<==\> Arrays](#1222-analogy-smaller-page-tables--arrays)
+    - [12.2.1. TODO: ADD MERMAID DIAGRAM OF FREE LIST](#1221-todo-add-mermaid-diagram-of-free-list)
+    - [12.2.2. Page Allocation USING A PAGE FOR EACH SMALLER PAGE TABLE](#1222-page-allocation-using-a-page-for-each-smaller-page-table)
+    - [12.2.3. ANALOGY: Smaller Page Tables \<==\> Arrays](#1223-analogy-smaller-page-tables--arrays)
   - [12.3. PRACTICE](#123-practice)
-    - [12.3.1. CONSIDER: Adding A Single Level](#1231-consider-adding-a-single-level)
+    - [12.3.1. TODO: REFORMAT AS QUESTION OF HOW MUCH SPACE IS SAVED IF WE USING 2-LEVEL VS. SINGLE-LEVEL PAGE TABLE](#1231-todo-reformat-as-question-of-how-much-space-is-saved-if-we-using-2-level-vs-single-level-page-table)
     - [12.3.2. Translating `3FFFF008` with 2 Page Tables](#1232-translating-3ffff008-with-2-page-tables)
   - [12.4. EXAMPLE CODE IMPLEMENTATION](#124-example-code-implementation)
 - [13. Page Table Implementation (2023-10-06)](#13-page-table-implementation-2023-10-06)
@@ -169,6 +172,7 @@
     - [13.4.2. Translation Look-Aside Buffer (TLB)](#1342-translation-look-aside-buffer-tlb)
       - [13.4.2.1. Effective Access Time (EAT)](#13421-effective-access-time-eat)
       - [13.4.2.2. Context Switches Require Handling the TLB](#13422-context-switches-require-handling-the-tlb)
+    - [13.4.3. `test-tlb.c` Results](#1343-test-tlbc-results)
   - [13.5. Using `sbrk()` for Userspace Allocation](#135-using-sbrk-for-userspace-allocation)
   - [13.6. Kernel Initializes the Process' Address Space](#136-kernel-initializes-the-process-address-space)
   - [13.7. Kernel Can Provide Fixed Virtual Addresses](#137-kernel-can-provide-fixed-virtual-addresses)
@@ -620,7 +624,6 @@ flowchart
 	3 --> 4(["blocked"])
 	4 --> 2
 	3 --> 5(["TERMINATED"])
-
 ```
 
 ## 4.3. Reading Process States via `/proc`
@@ -1840,7 +1843,8 @@ int main(int argc, char* argv[]) {
 
 #### 8.3.3.1. Visualization of Pipes
 ```mermaid
-
+graph LR;
+  1["newfd"] -->|points to| 2["oldfd"]
 ```
 
 <div align="right">
@@ -1884,7 +1888,6 @@ int main(int argc, char* argv[]) {
   - cannot be taken away from a process **WITHOUT ACKNOWLEDGEMENT** (by the process, say, terminating)
   - is shared via allocations/deallocations (of resources to a process by the kernel)
   - e.g. disk memory
-
 
 ## 9.2. Dispatcher & Scheduler
 - **Dispatcher**
@@ -2333,8 +2336,8 @@ e.g. `0x1:0xFF` with segment `0x1` base = `0x2000`, limit = `0x1FF`
 
 ## 11.3. First Insight: Divide Memory into Fixed-Sized Chunks
 ```mermaid
-graph LR
-	1["virtual block"] --> 2("physical block")
+graph LR;
+  1["Virtual block"] -->|points to| 2["Physical block"]
 ```
 
 ## 11.4. Memory Management Unit (MMU)
@@ -2342,13 +2345,17 @@ graph LR
   - Also checks permissions
 - One technique is to divide memory up into fixed-size pages (typically 4096 bytes)
   - A page in virtual memory is called a page
+    - the location/index of a virtual memory page is represented by a [VPN](#1151-vpn-virtual-page-number--ppn-physical-page-number)
   - A page in physical memory is called a frame
+    - the location/index of a physical memory page is represented by a [PPN](#1151-vpn-virtual-page-number--ppn-physical-page-number)
 
 ## 11.5. Why Not To Use All 64 Virtual Address Bits
 - CPUs may have different levels of virtual addresses you can use
   - Implementation ideas are the same
 - We'll assume a 39 bit virtual address space used by RISC-V and other architectures
   - Allows for 512 GiB of addressable memory (called Sv39)
+
+### 11.5.1. VPN (Virtual Page Number) & PPN (Physical Page Number)
 - Implemented with a page table indexed by Virtual Page Number (VPN)
   - Looks up the Physical Page Number (PPN)
 
@@ -2380,22 +2387,55 @@ We would get the following virtual-->physical address translations:
 | `0x2884` --> `0x3884` |
 | `0x32D0` --> `0x72D0` |
 
+***Q:*** how does the above translation work? {.lr}
+> ***A:*** offset is 12 bits & each hex digit is 4 bits, so the last 3 hex digits in the virtual address represents the offset (location in page) {.lg}
+  - remaining bits before offset is the index used to get the corresponding [PPN](#116-vpn-virtual-page-number--ppn-physical-page-number), which occupies the bits before the offset in the physical address
+
+## 11.7. PRACTICE
+
+> ---
+
 ***Q:*** Assume you have a 8-bit virtual address, 10-bit physical address, and each page is 64 bytes. {.lr}
+> ***A:*** translate page size of 64 bytes to "$n$-bit page size to make calculations easier: $2^n = 64 \rightarrow n=6 \rightarrow$ 6-bit page size{.lg}
+
+> ---
+
 ***Q: a)*** How many virtual pages are there? {.lr}
 > ***A:*** $\frac{2^8}{2^6} = 4$ {.lg}
+  - $\text{\# of virtual pages} = \frac{\text{\# of virtual addresses}}{\text{\# of bits per page}}$
+
+> ---
 
 ***Q: b)*** How many physical pages are there? {.lr}
 > ***A:*** $\frac{2^{10}}{2^6} = 16$ {.lg}
+  - $\text{\# of physical pages} = \frac{\text{\# of physical addresses}}{\text{\# of bits per page}}$
 
-***Q: c)*** How many entries are in the page table? {.lr}
+> ---
+
+***Q: c)*** How many entries are in the page table (i.e. # of PTEs)? {.lr}
 > ***A:*** $4$ {.lg}
+  - $\text{\# of PTEs} = 2^{\text{(\# of physical bits) - (\# of virtual bits)}}$
+    - **if $\text{\# of physical bits} > \text{\# of virtual bits}$**
+    - otherwise $1$ (since there are more than enough virtual addresses to represent each physical address in one page, so only one PTE)
 
-***Q: d)*** Given the page table is `[0x2, 0x5, 0x1, 0x8]`, what's the physical address of `0xF1`? {.lr}
-> ***A:*** `0x231` {.lg}
+> ---
 
-<!-- ADD EXPLANATIONS FROM VIDEO -- 45:00 -->
+***Q: *** Given the following page table, what's the physical address of virtual address `0xF1`? {.lr}
 
-## 11.7. Each Process Gets Its Own Page Table
+| VPN | PPN |
+| --- | --- |
+| 0x0 | 0x2 |
+| 0x1 | 0x5 |
+| 0x2 | 0x1 |
+| 0x3 | 0x8 | {.lr}
+
+- ***A:*** `0x231`{.g} {.lg}
+  - convert virtual address from hex digits to bits: `0xF1` <=> `0b1111_0001`
+  - need 2 bits for VPN (`0b11...`); remainder is offset (`...110001`)
+  - translate from VPN to PP using page table (VPN: `0b11` <=> `0x3` --> PPN: `0x8` <=> `0b1000`) & keep offset as is to get physical address: `0b1000·110001` <=> `0x231`{.g}
+    - `binary` -> `hex` via grouping by 4 bits from LSB
+
+## 11.8. Each Process Gets Its Own Page Table
 - When you `fork()` a process, it will copy the page table from the parent
    -  Turn off the write permission so the kernel can implement copy-on-write
 - Problem is there are $2^{27}}$ entries in the page table, each one is 8 bytes
@@ -2404,12 +2444,12 @@ We would get the following virtual-->physical address translations:
   - It has 10 bits to spare in the PTE and could expand
   - Page size is 4096 bytes (size of offset field)
 
-### 11.7.1. `vfork()`
+### 11.8.1. `vfork()`
 Shares all memory with the parent (means less overhead since page tables aren't copied)
 - undefined behavior to modify anything
 - only used in very performance sensitive programs
 
-## 11.8. Using Pages for Memory Translation
+## 11.9. Using Pages for Memory Translation
 - Divide memory into blocks, so we only have to translate once per block
 - Use page tables (array of PTEs) to access the PPN (and flags)
 - New problem: these page tables are always huge!
@@ -2444,17 +2484,45 @@ Shares all memory with the parent (means less overhead since page tables aren't 
 ## 12.1. Reducing Page Table Memory Wastage
 - We left off talking about [how large page tables can get & how `fork()`-ing can cause unnecessary duplications of large volumes of data](#each
 )
-- most programs don't use all virtual memory space; how can we take advantage? {.lr}
+- most programs don't use all virtual memory space; how can we take advantage?
 
 ### 12.1.1. Fit Page Table on a Page
 
-<!-- 5:00 img (different from b4!) -->
+![Alt text](image-2.png)
 
 ### 12.1.2. Multi-Level Page Tables (Save Space for Sparse Allocations)
 
-<!-- 7:00 -->
+![Alt text](image-3.png)
 
-- Processes Use A Register Like `satp` to Set the Root Page Table (see diagram)
+- processes use a register like `satp` to set the root page table (see diagram; `satp` just points to the L2 page table)
+- procedure to translate virtual address to physical address:
+  1. `L2` bits indicate index in L2 page table that points to which L1 page table to look at
+  2. `L1` bits indicate index in L1 page table (given by value in `L2` bits) that points to which L0 page table to look at
+  3. `L0` bits point to a PPN in the L0 page table
+
+- is like a tree diagram
+
+---
+
+***Q:*** how does using a multi-level page table save space? {.lr}
+- ***A:***  {.lg}
+  - by breaking up the page table with $2^{27} \approx \text{1 GiB}$ entries into multiple page tables (each taking up/fitting on a page), we no longer need to copy the entire page table to translate a single address
+  - we also don't have to fully fill out each page table (i.e. make all L2 page tables have entries all pointing to a L2 page table, etc.)
+  - e.g. to translate a single address, we only need one L2 page table, one L1 page table, & one L0 page table = 3 pages ($\times 4 \text{ KiB} = 12 \text{ KiB vs. >1 GiB}$)
+
+---
+
+***Q:*** how many page tables does each page table point to? {.lr}
+- ***A:***{.lg}
+  - each L2 page table points to $2^9$ L1 page tables
+    - each L1 page table points to $2^9$ L0 page tables
+      - each L0 page table points to $2^9$ PPNs
+  - $\text{total \# of PPNs} = (2^9)^3 = 2^{27} =$ same # of pages as a single page table
+
+---
+
+***Q:*** what disadvantages do multi-level page tables have compared to single-level page tables? {.lr}
+> ***A:*** single-level page table has single translation, while multi-level has 3. {.lg}
 
 ## 12.2. Page Allocation (Uses a Free List)
 Given physical pages, the operating system maintains a free list (linked list)
@@ -2464,31 +2532,41 @@ Given physical pages, the operating system maintains a free list (linked list)
   - To allocate a page, you remove it from the free list
   - To deallocate a page you add it back to the free list
 
-### 12.2.1. Page Allocation USING A PAGE FOR EACH SMALLER PAGE TABLE
+### 12.2.1. TODO: ADD MERMAID DIAGRAM OF FREE LIST
+
+### 12.2.2. Page Allocation USING A PAGE FOR EACH SMALLER PAGE TABLE
 - $512 = 2^9 \text{entries}$ of $8 = 2^3 \text{bytes} = 4096 \text{bytes}$
 - `PTE` for `L(N)` points to the page table for the next lowest level `L(N-1)`
 - Follow page tables until `L0` (which contains `PPN`)
 
-### 12.2.2. ANALOGY: Smaller Page Tables <==> Arrays
+***Q:*** what if we wanted 4 levels in our multi-level page table? {.lr}
+> ***A:*** then we would need an additional 9 bits for the 4th level (L3), meaning that we would need $(9*3+12)+9 = (27+12)+9 = 39+9 = 48$ bits to represent virtual addresses {.lg}
+
+### 12.2.3. ANALOGY: Smaller Page Tables <==> Arrays
 Instead of...
 ```c
-int page_table[512] // What's the size of this?
+int page_table[512]; // What's the size of this?
 /* or */
 x = page_table[2]; // What's the offset of index 2?
 ```
 ...we have...
 ```c
-PTE page_table[512]
+PTE page_table[512];
 /* where: */
-sizeof(page_table) == PAGE_SIZE
+sizeof(page_table) == PAGE_SIZE;
 /* and */
-sizeof(page_table) = number of entries * sizeof(PTE)
+sizeof(page_table) = number of entries * sizeof(PTE);
 ```
+
+***Q:*** what does the above analogy mean? {.lr}
+- ***A:*** answer {.lg}
+  - `int page_table[512];` -- $512 \text{ ints} \times \frac{4 \text{ bytes}}{\text{int}} = 2048 \text{ bytes} = 2^{11} \text{ bytes (B)} = 2 \text{ KiB}$
 
 <!-- WHITEBOARD EXAMPLE -->
 
 ## 12.3. PRACTICE
-### 12.3.1. CONSIDER: Adding A Single Level
+### 12.3.1. TODO: REFORMAT AS QUESTION OF HOW MUCH SPACE IS SAVED IF WE USING 2-LEVEL VS. SINGLE-LEVEL PAGE TABLE
+
 Assume our process uses just one virtual address at `0x3FFFF008`
 ```c
    0x3FFFF008
@@ -2497,10 +2575,12 @@ Assume our process uses just one virtual address at `0x3FFFF008`
 // =
    0b111111111_111111111_000000001000
 ```
+- offset is `0x008`
+- L0 index (9 bits): `0b111 111 111` = 511
+- L1 index (9 bits): `0b111 111 111` = 511
 
 If we consider a 30-bit virtual address with a page size of 4096 bytes:
-- ***A:*** need a 2 MiB page table if we only had one $2^{18} \times 2^{3}$ {.lg}
-
+- ***A:*** need a 2 MiB page table if single-level page table ($2^{18} \times 2^{3}$) {.lg}
 
 If we instead have a 4 KiB L1 page table ($2^9 \times 2^{3}$) and a 4 KiB L0 page table
 - ***A:*** Total of 8 KiB instead of 2 MiB {.lg}
@@ -2536,6 +2616,14 @@ Consider the L1 table with the entry...
 #include <sys/mman.h>
 #include <unistd.h>
 
+static uint64_t* allocate_page_table();
+static void deallocate_page_table(void* page);
+static uint64_t mmu(uint64_t virtual_address);
+uint64_t pte_from_ppn(uint64_t ppn);
+uint64_t pte_from_page_table(uint64_t* page_table);
+
+// -----------------
+
 #define PAGE_SIZE 4096
 
 #define LEVELS 3
@@ -2543,85 +2631,99 @@ Consider the L1 table with the entry...
 
 static uint64_t* root_page_table = NULL;
 
+// -----------------
+
+int main() {
+  // sanity check: kernel page size matches my code's assumed page size (4096 B)
+  assert(sysconf(_SC_PAGE_SIZE) == PAGE_SIZE);
+
+  // returns a new page table
+  uint64_t* l2_page_table_1 = allocate_page_table();
+
+  // set root page table (L2)
+  root_page_table = l2_page_table_1;
+
+  uint64_t* l1_page_table_1 = allocate_page_table();
+  l2_page_table_1[0] = pte_from_page_table(l1_page_table_1);
+
+  uint64_t* l0_page_table_1 = allocate_page_table();
+  l1_page_table_1[5] = pte_from_page_table(l0_page_table_1);
+
+  l0_page_table_1[188] = pte_from_ppn(0xCAFE);
+
+  mmu(0xABCDEF); // returns PPN using VPN
+  mmu(0x1ABCDEF); // address does not exist; page fault
+
+  deallocate_page_table(root_page_table);
+  root_page_table = NULL;
+
+  return 0;
+}
+
+// -----------------
+
 static uint64_t* allocate_page_table() {
-    void* page = mmap(NULL, PAGE_SIZE, PROT_READ|PROT_WRITE, MAP_ANONYMOUS|MAP_PRIVATE, -1, 0);
-    if (page == MAP_FAILED) {
-        int err = errno;
-        perror("mmap");
-        exit(err);
-    }
-    return page;
+  void* page = mmap(NULL, PAGE_SIZE, PROT_READ|PROT_WRITE, MAP_ANONYMOUS|MAP_PRIVATE, -1, 0);
+  if (page == MAP_FAILED) {
+    int err = errno;
+    perror("mmap");
+    exit(err);
+  }
+  return page;
 }
 
 static void deallocate_page_table(void* page) {
-    if (munmap(page, PAGE_SIZE) == -1) {
-        int err = errno;
-        perror("munmap");
-        exit(err);
-    }
+  if (munmap(page, PAGE_SIZE) == -1) {
+    int err = errno;
+    perror("munmap");
+    exit(err);
+  }
 }
 
 static uint64_t mmu(uint64_t virtual_address) {
-    uint64_t* page_table = root_page_table;
-    uint64_t va = (uint64_t) virtual_address;
-    for (int i = LEVELS - 1; i >= 0; --i) {
-        uint8_t start_bit = 9 * i + 12;
-        uint64_t mask = (uint64_t) 0x1FF << start_bit;
-        uint16_t index = (mask & va) >> start_bit;
+  uint64_t* page_table = root_page_table;
+  uint64_t va = (uint64_t) virtual_address;
+  for (int i = LEVELS - 1; i >= 0; --i) {
+    uint8_t start_bit = 9 * i + 12;
+    uint64_t mask = (uint64_t) 0x1FF << start_bit;
+    uint16_t index = (mask & va) >> start_bit;
 
-        uint64_t pte = page_table[index];
-        if (!(pte & PTE_VALID)) {
-            printf("0x%lX: page fault\n", va);
-            return 0;
-        }
-
-        if (i != 0) {
-            page_table = (uint64_t*) ((pte >> 10) << 12);
-            continue;
-        }
-
-        uint64_t pa = ((pte & ~0x3FF) << 2) | (va & 0xFFF);
-        printf("0x%lX: 0x%lX\n", va, pa);
-        return pa;
+    uint64_t pte = page_table[index];
+    if (!(pte & PTE_VALID)) {
+      printf("0x%lX: page fault\n", va);
+      return 0;
     }
-    __builtin_unreachable();
+
+    if (i != 0) {
+      page_table = (uint64_t*) ((pte >> 10) << 12);
+      continue;
+    }
+
+    uint64_t pa = ((pte & ~0x3FF) << 2) | (va & 0xFFF);
+    printf("0x%lX: 0x%lX\n", va, pa);
+    return pa;
+  }
+  __builtin_unreachable();
 }
 
 
 uint64_t pte_from_ppn(uint64_t ppn) {
-    uint64_t pte = ppn << 10;
-    pte |= PTE_VALID;
-    return pte;
+  uint64_t pte = ppn << 10;
+  pte |= PTE_VALID;
+  return pte;
 }
 
 uint64_t pte_from_page_table(uint64_t* page_table) {
-    return pte_from_ppn(((uint64_t) page_table) >> 12);
-}
-
-int main() {
-    assert(sysconf(_SC_PAGE_SIZE) == PAGE_SIZE);
-
-    uint64_t* l2_page_table_1 = allocate_page_table();
-
-    root_page_table = l2_page_table_1;
-
-    uint64_t* l1_page_table_1 = allocate_page_table();
-    l2_page_table_1[0] = pte_from_page_table(l1_page_table_1);
-
-    uint64_t* l0_page_table_1 = allocate_page_table();
-    l1_page_table_1[5] = pte_from_page_table(l0_page_table_1);
-
-    l0_page_table_1[188] = pte_from_ppn(0xCAFE);
-
-    mmu(0xABCDEF);
-    mmu(0x1ABCDEF);
-
-    deallocate_page_table(root_page_table);
-    root_page_table = NULL;
-
-    return 0;
+  return pte_from_ppn(((uint64_t) page_table) >> 12);
 }
 ```
+
+***Q:*** manually translate virtual address `0xABCDEF` {.lr}
+- ***A:***  {.lg}
+  - `0xDEF` is offset
+  - L0 index: `0b0_1011_1100` = 188
+  - L1 index: `0b0_0000_0101` = 5
+  - L2 index: `0` = `0b0_0000_0000`
 
 <!-- DIAGRAM ILLUSTRATING CONCEPT -->
 
@@ -2654,29 +2756,48 @@ int main() {
 # 13. Page Table Implementation (2023-10-06)
 ## 13.1. ALIGNMENT: Memory Eventually Lines Up With Byte 0
 - If pages are **`4096` byte aligned** in memory, this means pages always start when the lower 12 bits are zero, in computing we like alignment.
-- If a page started at address `0x7C00`, its last byte would be at address `0x8BFF`
-  - Instead, a page would start at `0x7000` and end at `0x7FFF`
+  - if pages are aligned, this makes our lives easier since we know where page ends automatically
 
-***Q:*** Is address `0xEC` 8 byte aligned? {.lr}
+```c
+page starting at address `0x7C00` --> last byte would be at address `0x8BFF`
+// vs.
+page starting at address `0x7000` --> last byte would be at address `0x7FFF`
+```
+
+***Q:*** Is address `0xEC` 8-byte aligned? {.lr}
+- ***A:*** 8 byte aligned = address is a multiple of 8 {.lg}
+  - `0xC` $= 12$ --> **not a multiple of 8**{.r} ! --> $\therefore$ not 8-byte aligned
+  - recall for pages: `0xFFF` $= 4096$ --> $\therefore$ 4096 byte aligned
+
+***Q:*** Is address `0x4F` 16-byte aligned? {.lr}
+> ***A:*** no; 16-byte aligned requires LSB to be 0 (e.g. `0x10` -> `0x20` is 16-byte aligned) {.lg}
 
 ## 13.2. PRACTICE: How Many Page Tables Do We Need?
 ***Q:*** assume our program uses 512 pages; ***a)*** What's the minimum number of page tables we need? {.lr}
-> ***A:*** 1 {.lg}
+- ***A:*** 3; $\text{1 page table } = 512 \text{ pages}$, so we only need 1 L0 page table (and then one L1 & one L2 table pointing to it) {.lg}
+  - ![Alt text](image-4.png)
 
 ***Q: b)*** What's the maximum number of page tables? {.lr}
-> ***A:*** ? {.lg}
+- ***A:*** 1025 $= 512 + 512 + 1$ {.lg}
+  - ![Alt text](image-5.png)
 
-<!-- WHITEBOARDING -->
 
 ## 13.3. PRACTICE: How Many Levels Do I Need?
 Assume we have a 32-bit virtual address with a page size of 4096 bytes and a PTE size of 4 bytes.
 
 Want each page table to fit into a single page
 - Find the number of PTEs we could have in a page ($2^{10}$)
-  - ${log_2(\text{\# PTEs\ per\ Page})}$ is the number of bits to index a page table
-- $\text{# of levels} = \frac{\text{(VIRTUAL bits) - (OFFSET bits)}}{INDEX bits}$
+  - ${log_2(\text{\# PTEs per page})}$ is the number of bits to index a page table
+- $\text{\# of levels} = \lceil \frac{\text{(VIRTUAL bits) - (OFFSET bits)}}{\text{INDEX bits}} \rceil$
 
-<!-- WHITEBOARD EXAMPLE -->
+***Q: a)*** given a 32-bit virtual address, 4096-byte page size, & 4-byte PTE, how many entries can we fit onto our (page-sized) page table? {.lr}
+> ***A:*** $\frac{2^{12}}{2^2} = 2^10  = 1024$ entries {.lg}
+  - $\frac{\text{\# of PTEs}}{page} = \frac{\text{\# of pages}}{\text{\# of PTEs}}$
+
+***Q: b)*** how many levels of page tables do we need given the previous requirements? {.lr}
+- ***A:*** $\text{\# of levels} = \lceil \frac{\text{(VIRTUAL bits) - (OFFSET bits)}}{\text{INDEX bits}} \rceil = \lceil \frac{32 - 12}{10} \rceil = \lceil \frac{20}{10} \rceil = \lceil 2 \rceil = 2$ levels of page tables {.lg}
+  - makes sense since the size of each level (= # of entries in each page table) is 10 bits ($2^{10}$ entries), so: L1 (10 bits), L0 (10 bits), offset (12 bits) ==> **32 bits (given size of virtual address!)**{.g}
+
 
 ## 13.4. Speeding Up Page Table Implementation via Caching
 ### 13.4.1. Using the Page Tables for Every Memory Access is Slow
@@ -2688,7 +2809,7 @@ Want each page table to fit into a single page
 ### 13.4.2. Translation Look-Aside Buffer (TLB)
 A TLB Caches PTEs
 
-<!-- tlb.eps ILLUSTRATION -->
+![Alt text](image-6.png)
 
 #### 13.4.2.1. Effective Access Time (EAT)
 Assume a single page table (there's only one additional memory access in the page table)
@@ -2718,11 +2839,24 @@ You can either flush the cache, or attach a process ID to the TLB.
   - RISC-V uses a `sfence.vma` instruction to flush the TLB
   - On x86 loading the base page table will also flush the TLB
 
+### 13.4.3. `test-tlb.c` Results
 ```c
-// test-tlb.c
+./test-tlb <size> <stride>
+
+/* Creates a <size> memory allocation and acccesses it every <stride> bytes */
 ```
 
-<!-- SEE NOTES IN GITLAB .TEX THATS NOT IN VIDEO! -->
+Results:
+```c
+> ./test-tlb 4096 4 // ALL cache HITS, since within page size
+      1.93ns (~7.5 clock cycles) // BEST performance
+
+> ./test-tlb 536870912 4096 // ALL cache MISSES, since larger than page size
+      155.51ns (~606.5 clock cycles) // WORST performance
+
+> ./test-tlb 16777216 128 // 50-50 cache hits-misses
+      14.78ns (~57.6 clock cycles) // avg. performance
+```
 
 ## 13.5. Using `sbrk()` for Userspace Allocation
 This call grows or shrinks your heap (the stack has a set limit)
@@ -2734,7 +2868,8 @@ This call grows or shrinks your heap (the stack has a set limit)
 - Memory allocators use `mmap` to bring in large blocks of virtual memory
 
 ## 13.6. Kernel Initializes the Process' Address Space
-<!-- TABLE ILLUSTRATION FROM SLIDE -->
+
+![Alt text](image-7.png)
 
 ## 13.7. Kernel Can Provide Fixed Virtual Addresses
 Allows the process to access kernel data without using a system call
