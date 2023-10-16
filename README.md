@@ -178,6 +178,17 @@
   - [13.7. Kernel Can Provide Fixed Virtual Addresses](#137-kernel-can-provide-fixed-virtual-addresses)
     - [13.7.1. Page Faults Allow the Operating System to Handle Virtual Memory](#1371-page-faults-allow-the-operating-system-to-handle-virtual-memory)
   - [13.8. SUMMARY](#138-summary)
+- [14. Priority Scheduling and Memory Mapping (2023-10-10)](#14-priority-scheduling-and-memory-mapping-2023-10-10)
+  - [14.1. Dynamic Priority (Feedback) Scheduling](#141-dynamic-priority-feedback-scheduling)
+    - [14.1.1. Dynamic Priority Calculations](#1411-dynamic-priority-calculations)
+      - [14.1.1.1. Priority Interval](#14111-priority-interval)
+    - [14.1.2. PRACTICE](#1412-practice)
+  - [14.2. Memory Mapping (NOT TESTABLE)](#142-memory-mapping-not-testable)
+    - [14.2.1. `mmap`](#1421-mmap)
+  - [14.3. `mmap` Example](#143-mmap-example)
+    - [14.3.1. Why `mmap` Is More Efficient](#1431-why-mmap-is-more-efficient)
+    - [14.3.2. `mmap` Details](#1432-mmap-details)
+    - [14.3.3. `mmap` Page Table Calculations](#1433-mmap-page-table-calculations)
 
 
 <!--------------------------------{.gray}------------------------------>
@@ -2887,3 +2898,183 @@ The MMU is the hardware that uses page tables, which may:
 - Use the kernel allocated pages from a free list
 - Be a multi-level to save space for sparse allocations
 - Use a TLB to speed up memory accesses
+
+
+
+
+
+
+
+
+
+<!--------------------------------{.gray}------------------------------>
+
+
+
+
+
+
+
+<hr style="border:30px solid #FFFF; margin: 100px 0 100px 0; {.gray}"> </hr>
+
+
+
+
+
+
+<!--------------------------------{.gray}------------------------------>
+<div style="page-break-after: always;"></div>
+
+# 14. Priority Scheduling and Memory Mapping (2023-10-10)
+## 14.1. Dynamic Priority (Feedback) Scheduling
+
+- use set time slices, and measure CPU usage
+- let the algorithm manage the priorities
+  - Increase the priority of processes that don't use their time slice
+  - Decrease the priority of processes that use their full time slice
+
+### 14.1.1. Dynamic Priority Calculations
+
+- Each processes gets assigned a priority when started, $P_n$
+- Pick the lowest priority number to schedule, if it yields, pick the next lowest number
+  - Breaks ties with arrival order!
+  - If a lower priority number becomes ready, switch to it
+- Record how much time each process executes for in this priority interval, $\mathsf{C_n}$
+  - Timer interrupts still occur
+- At the end of the priority interval, update the priority of each process with:
+  - $\mathsf{P_n =  \frac{P_n}{2} + C_n}$
+  - and reset the value of $\mathsf{C_n}$ back to 0
+
+#### 14.1.1.1. Priority Interval
+
+Time between recalculations of priority using the dynamic priority algorithm.
+- Means that processes will have the same priority between priority intervals, even if one or multiple processes terminate within an interval
+
+### 14.1.2. PRACTICE
+
+- ***Q:*** Assume we have 4 processes (each with an initial priority of 0 & infinite runtime) ready to execute arriving in order: X, Y, A, B {.lr}
+  - A and B are CPU bound processes
+  - X and Y are I/O bound processes that execute for 1 and block for 5
+  - Timer interrupts occur every 1, and each time slice is 10, priority interval is 10
+
+What is the scheduling? (each box is a timer interrupt) {.lr}
+
+![Alt text](image.png) {.lr}
+
+- ***A:***  {.lg}
+  1. Since each process has the same initial priority, we schedule the earliest arriving one first (X)
+  2. X is I/O bound; executes from 0->1, then blocks until 6 (Y goes next; executes from 1->2, then blocks until 7)
+  3. A goes after X,Y and executes from 2->10 (when priority is recalculated); we do not context-switch to X,Y after they have finished blocking at 6,7 because they have the same priority as A
+  4. at t=10, we recalculate priorities:
+     - $\mathsf{P_X} = \frac{0}{2} + 1 = 1$}
+     - $\mathsf{P_Y} = \frac{0}{2} + 1 = 1$}
+     - $\mathsf{P_A} = \frac{0}{2} + 8 = 8$}
+     - $\mathsf{P_B} = \frac{0}{2} + 0 = 0$}
+    - new order of priorities (highest-->lowest): **B(0), X(1), Y(1), A(8)**
+  5. since B has the highest priority, it will run for the full time interval from 10->20
+  - ![Alt text](image-1.png)
+
+---
+
+- ***Q:*** Assume we have 4 processes (**A, B have priority 6; X, Y have priority 0**; infinite runtime) ready to execute arriving in order: X, Y, A, B {.lr}
+  - A and B are CPU bound processes
+  - X and Y are I/O bound processes that execute for 1 and block for 5
+  - Timer interrupts occur every 1, and each time slice is 10, priority interval is 10
+
+What is the scheduling? (each box is a timer interrupt) {.lr}
+
+![Alt text](image.png) {.lr}
+
+- ***A:*** {.lg}
+  1. X, Y run first from 0->1, 1->2; blocks from 1->6, 2->7
+  2. A then runs from 2->6; **at t=6, X (higher priority than A) has finished blocking, so we context-switch back to X for 1 time unit** (6->7); same idea for Y (7->8)
+     - X, Y blocks from 7->12, 8->13
+  3. A resumes from 8->10 (A still has priority over B because A came before & priority hasn't been recalculated)
+  4. at t=10, we recalculate priorities:
+     - $\mathsf{P_X} = \frac{0}{2} + 2 = 2$;
+     - $\mathsf{P_Y} = \frac{0}{2} + 2 = 2$;
+     - $\mathsf{P_A} = \frac{6}{2} + 6 = 9$;
+     - $\mathsf{P_B} = \frac{6}{2} + 0 = 3$;
+     - new order of priorities (highest-->lowest): **X(2), Y(2), B(3), A(9)**
+  5. X,Y have lower priority but still blocked, so B runs until X, Y unblocked; then after X,Y re-execute, B resumes because it has higher priority than A
+  - ![Alt text](image-2.png)
+
+## 14.2. Memory Mapping (NOT TESTABLE)
+
+Memory map, or `mmap`` is used to map files to a processes' virtual address space.
+- The pointer (virtual address) returned will allow you to access the file directly
+
+### 14.2.1. `mmap`
+
+`mmap` takes 6 arguments:
+1. **`void *addr`**: suggested starting address (**`NULL`** means you don't care)
+2. **`size\_t length`**: number of bytes to map
+3. **`int prot`**: protection flags (read/write/execute)
+4. **`int flags`**: mapping flags (shared/private/anonymous)
+   - anonymous means the mapping isn't backed by a file
+5. **`int fd`**: file descriptor to map (ignored for anonymous)
+6. **`off\_t offset`**: offset to start the mapping (must be a multiple of page size)
+
+## 14.3. `mmap` Example
+```c
+// mmap.c
+
+#include <assert.h>
+#include <fcntl.h>
+#include <stdio.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
+int main(void) {
+    int fd = open("mmap.c", O_RDONLY);
+    assert(fd == 3);
+    struct stat stat;
+    assert(fstat(fd, &stat) == 0);
+    char* data = mmap(NULL, stat.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+    assert(data != MAP_FAILED);
+    assert(close(fd) == 0);
+
+    for (int i = 0; i < stat.st_size; ++i) {
+        printf("%c", data[i]);
+    }
+
+    assert(munmap(data, stat.st_size) == 0);
+    return 0;
+}
+
+```
+
+### 14.3.1. Why `mmap` Is More Efficient
+
+Since `mmap` is able to read/write data w/o having to setup a buffer, use system calls, it is more efficient than the alternative (setup a buffer, use system calls).
+
+### 14.3.2. `mmap` Details
+- It just sets up the page tables, it doesn't actually read from the file
+- It would create an invalid PTE during the `mmap` call
+- The kernel uses the remaining bits of the PTE for bookkeeping
+  - Where on the disk is this entry
+- The first access to the page would generate a page fault
+  - The kernel would then read from disk into memory
+- This ensures only the used parts of the file get read
+
+### 14.3.3. `mmap` Page Table Calculations
+
+- ***Q:*** How much space would the kernel need for page tables? Is this correct? Why or why not? {.lr}
+  - Someone posted you'd need 40 MB of page tables:
+    - $(20*(1024*1024*1024)/4096*8) / (1024*1024)$
+  - Someone else clarified it's:
+    - $(20GB / 4KB Page size * 8 bytes per PTE) / 1KB$
+    - (i.e. the 1KB at the end should be 1MB)
+
+> ***A:*** you also need to take into account the multiple levels of page tables! {.lg}
+
+***Q:*** How much space do our page tables need in the best case? {.lr}
+
+- ***A:*** {.lg}
+  - $\mathsf{\frac{20 \times 2^{30}}{2^{12}} = 20 \times 2^{18}}$ PTEs
+    - However, these are how many PTEs we need across only the L0 page tables!
+  - $\mathsf{\frac{20 \times 2^{18}}{2^{9}} = 20 \times 2^{9} = 10240}$ full L0 page tables (40 MB)
+  - Each L1 page table can point to 512 L0 page tables
+    -  $\mathsf{\frac{10240}{512} = 20}$ full L1 page tables
+   -  **So we'd need `10250` full page tables $\mathsf{= \frac{10260 \times 4096}{2^{20}} = 40.078125}$ MiB**
