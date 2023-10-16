@@ -189,6 +189,23 @@
     - [14.3.1. Why `mmap` Is More Efficient](#1431-why-mmap-is-more-efficient)
     - [14.3.2. `mmap` Details](#1432-mmap-details)
     - [14.3.3. `mmap` Page Table Calculations](#1433-mmap-page-table-calculations)
+- [15. Sockets (2023-10-12)](#15-sockets-2023-10-12)
+  - [15.1. Sockets = IPC Between Machines](#151-sockets--ipc-between-machines)
+  - [15.2. Socket System Calls](#152-socket-system-calls)
+    - [15.2.1. SERVER vs. CLIENT Socket System Calls](#1521-server-vs-client-socket-system-calls)
+      - [15.2.1.1. System Calls to Use Sockets on SERVERS](#15211-system-calls-to-use-sockets-on-servers)
+      - [15.2.1.2. System Calls to Use Sockets on CLIENTS](#15212-system-calls-to-use-sockets-on-clients)
+    - [15.2.2. `socket` (Sets the Protocol and Type of Socket)](#1522-socket-sets-the-protocol-and-type-of-socket)
+      - [15.2.2.1. Socket Protocols](#15221-socket-protocols)
+        - [15.2.2.1.1. Stream Sockets Use TCP](#152211-stream-sockets-use-tcp)
+        - [15.2.2.1.2. Datagram Sockets Use UDP](#152212-datagram-sockets-use-udp)
+    - [15.2.3. `bind` (Sets a Socket to an Address)](#1523-bind-sets-a-socket-to-an-address)
+    - [15.2.4. `listen` (Sets Queue Limits for Incoming Connections)](#1524-listen-sets-queue-limits-for-incoming-connections)
+    - [15.2.5. `accept` (Blocks Until There's a Connection)](#1525-accept-blocks-until-theres-a-connection)
+    - [15.2.6. `connect` (Allows a Client to Connect to an Address)](#1526-connect-allows-a-client-to-connect-to-an-address)
+    - [15.2.7. `send`/`recv` (Instead Of `read`/`write`)](#1527-sendrecv-instead-of-readwrite)
+  - [15.3. Server Example](#153-server-example)
+  - [15.4. Why Use Sockets?](#154-why-use-sockets)
 
 
 <!--------------------------------{.gray}------------------------------>
@@ -3078,3 +3095,286 @@ Since `mmap` is able to read/write data w/o having to setup a buffer, use system
   - Each L1 page table can point to 512 L0 page tables
     -  $\mathsf{\frac{10240}{512} = 20}$ full L1 page tables
    -  **So we'd need `10250` full page tables $\mathsf{= \frac{10260 \times 4096}{2^{20}} = 40.078125}$ MiB**
+
+
+
+
+
+
+
+
+
+<!--------------------------------{.gray}------------------------------>
+
+
+
+
+
+
+
+<hr style="border:30px solid #FFFF; margin: 100px 0 100px 0; {.gray}"> </hr>
+
+
+
+
+
+
+<!--------------------------------{.gray}------------------------------>
+<div style="page-break-after: always;"></div>
+
+# 15. Sockets (2023-10-12)
+## 15.1. Sockets = IPC Between Machines
+- Pipes and signals; shared memory (seen previously)
+  - IPC that assume that the processes are on the same physical machine
+- **Sockets**
+  - enable **IPC between physical machines, typically over the network**
+
+## 15.2. Socket System Calls
+### 15.2.1. SERVER vs. CLIENT Socket System Calls
+#### 15.2.1.1. System Calls to Use Sockets on SERVERS
+
+4 system calls (each of which have C wrappers):
+1. `socket`
+   - Create the socket
+2. `bind`
+   - Attach the socket to some location (a file, IP:port, etc.)
+3. `listen`
+   - Indicate you're accepting connections, and set the queue limit
+4. `accept`
+   - Return the next incoming connection for you to handle
+
+#### 15.2.1.2. System Calls to Use Sockets on CLIENTS
+
+1. `socket`
+   - Create the socket
+2. `connect`
+   - Connect to some location (socket can now send/receive data)
+
+### 15.2.2. `socket` (Sets the Protocol and Type of Socket)
+
+```c
+int socket(int domain, int type, int protocol);
+```
+
+- `domain` is the general protocol, further specified with `protocol` (mostly unused)
+  - `AF_UNIX` is for local communication (on the same physical machine)
+  - `AF_INET` is for IPv4 protocol using your network interface
+  - `AF_INET6` is for IPv6 protocol using your network interface
+- `type` is (usually) one of two options: stream or datagram sockets
+
+#### 15.2.2.1. Socket Protocols
+##### 15.2.2.1.1. Stream Sockets Use TCP
+- All data sent by a client appears in the same order on the server
+- Forms a persistent connection between client and server
+- Reliable, but may be slow
+
+##### 15.2.2.1.2. Datagram Sockets Use UDP
+- Sends messages between the client and server
+- No persistent connection between client and server
+- Fast but messages may be reordered, or dropped
+
+### 15.2.3. `bind` (Sets a Socket to an Address)
+```c
+int bind(int socket, const struct sockaddr *address, socklen_t address_len);
+```
+
+- `socket` is the file descriptor returned from the `socket` system call
+- There's different `sockaddr` structures for different protocols
+  - `struct sockaddr_un` -- for local communcation (just a path)
+  - struct sockaddr_in` -- for IPv4, a IPv4 address (e.g. 8.8.8.8)
+  - `struct sockaddr_in6` -- for IPv6, a IPv6 address (e.g. `2001:4860:4860::8888`)
+
+### 15.2.4. `listen` (Sets Queue Limits for Incoming Connections)
+```c
+int listen(int socket, int backlog);
+```
+- `socket` is still the file descriptor returned from the
+- `backlog` is the limit of the outstanding (not accepted) connections
+  - The kernel manages this queue, and if full will not allow new connections
+  - We'll set `backlog` to 0 to use the default kernel queue size
+
+### 15.2.5. `accept` (Blocks Until There's a Connection)
+```c
+int accept(int socket, struct sockaddr *restrict address, socklen_t *restrict address_len);
+```
+
+- `socket` is still the file descriptor returned from the
+- `address` & `address_len` are locations to write the connecting address
+  - Acts as an optional return value, set both to `NULL` to ignore
+- This returns a new file descriptor, we can `read` or `write`to as usual
+
+### 15.2.6. `connect` (Allows a Client to Connect to an Address)
+
+```c
+int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
+```
+
+- `sockfd` is the file descriptor returned by the `socket` system call
+- The client would need to be using the same protocol and type as the server
+- `addr` and `addrlen` is the address to connect to, exactly like `bind`
+- If this call succeeds then `sockfd` may be used as a normal file descriptor
+
+### 15.2.7. `send`/`recv` (Instead Of `read`/`write`)
+
+- These system calls are basically the same thing, except they have `flags`
+- Some examples are:
+  - `MSG_OOB` --- Send/receive out-of-band data
+  - `MSG_PEEK` --- Look at data without reading
+  - `MSG_DONTROUTE` --- Send data without routing packets
+- Except for maybe `MSG_PEEK`, you do not need to know these
+- `sendto`/`recvfrom` also takes an additional address
+  - The kernel ignores the address for stream sockets (there's a connection)
+
+## 15.3. Server Example
+
+- sends `"Hello there!"` to every client and disconnects
+- uses a local socket just for demonstration, but you could use IPv4 or IPv6
+- uses signals to clean up and terminate from our infinite `accept` loop
+
+```c
+// server.c
+
+#include <assert.h>
+#include <errno.h>
+#include <signal.h>
+#include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <unistd.h>
+
+#define errno_exit(str)                                                        \
+  do { int err = errno; perror(str); exit(err); } while (0)
+
+#define SOCKET_PATH "example.sock"
+
+static int fd;
+
+void close_socket() {
+  if (close(fd)) {
+    errno_exit("close");
+  }
+  if (unlink(SOCKET_PATH)) {
+    errno_exit("unlink");
+  }
+  exit(0);
+}
+
+void handle_signal(int signum) {
+  assert(signum == SIGINT || signum == SIGTERM);
+  close_socket();
+}
+
+void register_signal(int signum) {
+  void (*sig_ret)(int) = signal(signum, handle_signal);
+  if (sig_ret == SIG_ERR) {
+    int err = errno;
+    perror("signal");
+    exit(err);
+  }
+}
+
+int main(void) {
+  register_signal(SIGINT);
+  register_signal(SIGTERM);
+
+  fd = socket(AF_UNIX, SOCK_STREAM, 0);
+  if (fd == -1) {
+    errno_exit("socket");
+  }
+
+  struct sockaddr_un sockaddr = {0};
+  sockaddr.sun_family = AF_UNIX;
+  strncpy(sockaddr.sun_path, SOCKET_PATH, sizeof(sockaddr.sun_path) - 1);
+
+  if (bind(fd, (const struct sockaddr*) &sockaddr, sizeof(sockaddr))) {
+    errno_exit("bind");
+  }
+
+  if (listen(fd, 0)) {
+    errno_exit("listen");
+  }
+
+  while (true) {
+    int connection_fd = accept(fd, NULL, NULL);
+    if (connection_fd == -1) {
+      errno_exit("accept");
+    }
+
+    const char *msg = "Hello there!";
+    ssize_t len = strlen(msg) + 1;
+    ssize_t bytes_written = write(connection_fd, msg, len);
+    if (bytes_written == -1) {
+      errno_exit("write");
+    }
+    else if (bytes_written != len) {
+      dprintf(2, "write: Unexpected partial result");
+      exit(1);
+    }
+
+    if (close(connection_fd)) {
+      errno_exit("close");
+    }
+  }
+
+  return 0;
+}
+```
+
+```c
+// client.c
+
+#include <errno.h>
+#include <signal.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <unistd.h>
+
+#define errno_exit(str)                                                        \
+  do { int err = errno; perror(str); exit(err); } while (0)
+
+#define SOCKET_PATH "example.sock"
+
+int main(void) {
+  int fd = socket(AF_UNIX, SOCK_STREAM, 0);
+  if (fd == -1) {
+    errno_exit("socket");
+  }
+
+  struct sockaddr_un sockaddr = {0};
+  sockaddr.sun_family = AF_UNIX;
+  strncpy(sockaddr.sun_path, SOCKET_PATH, sizeof(sockaddr.sun_path) - 1);
+
+  if (connect(fd, (const struct sockaddr*) &sockaddr, sizeof(sockaddr))) {
+    errno_exit("connect");
+  }
+
+  char buffer[4096];
+  ssize_t bytes_read;
+  while ((bytes_read = read(fd, buffer, sizeof(buffer))) > 0) {
+    /* Just keep reading all the data we can */
+  }
+  if (bytes_read == -1) {
+    errno_exit("read");
+  }
+
+  printf("Received: \"%s\"\n", buffer);
+
+  close(fd);
+
+  return 0;
+}
+```
+
+## 15.4. Why Use Sockets?
+
+**You perform networking through sockets**; sockets are IPC across physical machines, the basics are:
+- Sockets require an address (e.g. local and IPv4/IPv6)
+- There are two types of sockets: stream and datagram
+- Servers need to bind to an address, listen, and accept connections
+- Clients need to connect to an address
