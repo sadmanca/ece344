@@ -206,6 +206,25 @@
     - [15.2.7. `send`/`recv` (Instead Of `read`/`write`)](#1527-sendrecv-instead-of-readwrite)
   - [15.3. Server Example](#153-server-example)
   - [15.4. Why Use Sockets?](#154-why-use-sockets)
+- [16. Threads (2023-10-13)](#16-threads-2023-10-13)
+  - [16.1. CONCURRENCY vs. PARALLELISM](#161-concurrency-vs-parallelism)
+  - [16.2. THREADS vs. (FORKED) PROCESSES](#162-threads-vs-forked-processes)
+    - [16.2.1. Threads as Processes With Shared Memory](#1621-threads-as-processes-with-shared-memory)
+    - [16.2.2. Each Process Can Have Multiple Threads](#1622-each-process-can-have-multiple-threads)
+    - [16.2.3. Thread Concurrency Using A Single CPU](#1623-thread-concurrency-using-a-single-cpu)
+    - [16.2.4. Summary of THREADS vs. PROCESSES](#1624-summary-of-threads-vs-processes)
+  - [16.3. Using Threads in C via `pthread`](#163-using-threads-in-c-via-pthread)
+    - [16.3.1. `pthread_create`](#1631-pthread_create)
+      - [16.3.1.1. `pthread` Example](#16311-pthread-example)
+    - [16.3.2. `pthread_join`](#1632-pthread_join)
+      - [16.3.2.1. PRACTICE](#16321-practice)
+    - [16.3.3. `pthread_exit`](#1633-pthread_exit)
+  - [16.4. DETACHED Threads](#164-detached-threads)
+    - [16.4.1. `pthread_detach`](#1641-pthread_detach)
+      - [16.4.1.1. `pthread_attr_setdetachstate`](#16411-pthread_attr_setdetachstate)
+    - [16.4.2. PRACTICE](#1642-practice)
+  - [16.5. Using ATTRIBUTES To Get/Set Thread Variables](#165-using-attributes-to-getset-thread-variables)
+  - [16.6. Multiple Threads Example](#166-multiple-threads-example)
 
 
 <!--------------------------------{.gray}------------------------------>
@@ -3378,3 +3397,308 @@ int main(void) {
 - There are two types of sockets: stream and datagram
 - Servers need to bind to an address, listen, and accept connections
 - Clients need to connect to an address
+
+
+
+
+
+
+
+
+
+
+<!--------------------------------{.gray}------------------------------>
+
+
+
+
+
+
+
+<hr style="border:30px solid #FFFF; margin: 100px 0 100px 0; {.gray}"> </hr>
+
+
+
+
+
+
+<!--------------------------------{.gray}------------------------------>
+<div style="page-break-after: always;"></div>
+
+# 16. Threads (2023-10-13)
+## 16.1. CONCURRENCY vs. PARALLELISM
+
+Parallelism & concurrency are **independent** (a process can be parallel & concurrent, neither parallel nor concurrent, etc.).
+
+- Concurrency
+  - Switching between two or more things (can you get interrupted)
+  - Goal: make progress on multiple things
+- Parallelism
+  - Running two or more things at the same time (are they independent)
+  - Goal: run as fast as possible
+
+## 16.2. THREADS vs. (FORKED) PROCESSES
+### 16.2.1. Threads as Processes With Shared Memory
+Threads operate on the same principle as processes, **except threads share memory by default**
+- threads have their own registers, program counter, & stack
+- this memory has the same address space, so changes appear in each thread
+  - need to explicitly declare memory specific to some thread if needed (TLS)
+
+### 16.2.2. Each Process Can Have Multiple Threads
+
+- By default, a process just executes code in its own address space (i.e. **just one thread at start!**)
+- Threads allow multiple executions in the same address space
+- Threads have lighter weight & are less expensive to create than processes
+  - They share code, data, file descriptors, etc.
+
+### 16.2.3. Thread Concurrency Using A Single CPU
+
+- A process can appear like it’s executing in multiple locations at once
+  - However, the OS is just context switching within a process
+- It may be easier to program concurrently (e.g., handle a web request in a new thread)
+
+```c
+// a single thread can be dedicated to poll for & process requests; CPU will context-switch to it (according to scheduler) consistently, but also execute other processes in between
+
+while (true) {
+  struct request *req = get_request();
+  create_thread(process_request, req);
+}
+```
+
+### 16.2.4. Summary of THREADS vs. PROCESSES
+
+ | PROCESS                                  | THREAD                                |
+ | ---------------------------------------- | ------------------------------------- |
+ | Independent code / data / heap           | Shared code / data / heap             |
+ | Independent execution                    | Must live within an executing process |
+ | Has its own stack and registers          | Has its own stack and registers       |
+ | Expensive creation and context switching | Cheap creation and context switching  |
+ | Completely removed from OS on exit Stack | removed from process on exi           |
+
+## 16.3. Using Threads in C via `pthread`
+### 16.3.1. `pthread_create`
+returns 0 on success, error number otherwise (contents of `*thread` are undefined)
+```c
+int pthread_create(pthread_t* thread,
+                   const pthread_attr_t* attr,
+                   void* (*start_routine)(void*),
+                   void* arg);
+```
+- `thread` -- creates a handle to a thread at pointer location
+- `attr` -- thread attributes (NULL for defaults, more details later)
+- `start_routine` -- function to start execution
+- `arg` -- value to pass to start\_routine
+
+#### 16.3.1.1. `pthread` Example
+Note that I didn't have to do the following (that normally would be needed for forked processes):
+- call `wait` to acknowledge child process termination
+- need a separately-declared function to run thread code** vs.** forked process code can be run as a conditional block
+
+```c
+#include <pthread.h>
+#include <stdio.h>
+
+void* run(void*) {
+  printf("In run\n");
+  return NULL;
+}
+
+int main() {
+  pthread_t thread;
+  pthread_create(&thread, NULL, &run, NULL);
+  printf("In main\n");
+}
+```
+
+### 16.3.2. `pthread_join`
+- Returns 0 on success, error number otherwise
+- **only call this once per thread!**
+  - multiple calls on the same thread leads to undefined behavior
+```c
+int pthread_join(pthread_t thread,
+                 void** retval)
+```
+- `thread` -- wait for this thread to terminate (thread must be joinable)
+- `wait` -- stores exit status of thread (set by `pthread_exit`) to the location pointed by *retval; if cancelled, returns `PTHREAD_CANCELED`; `NULL` is ignored.
+
+#### 16.3.2.1. PRACTICE
+
+- ***Q:*** what will the following code print & why? {.lr}
+  ```c
+  // pthread-example.c
+
+  #include <pthread.h>
+  #include <stdio.h>
+
+  void* run(__attribute__((unused)) void* arg) {
+    printf("In run\n");
+    return NULL;
+  }
+
+  // can think of `main` as a thread too
+  int main(void) {
+    pthread_t thread;
+    pthread_create(&thread, NULL, &run, NULL);
+    printf("In main\n");
+    return 0;
+  }
+  ```
+
+> ***A:*** since `pthread_join` is not called, the process exits at `return 0` instead of waiting for the thread to execute (slower than `main` because it has to setup) {.lg}
+  ```c
+  // ...
+
+  int main(void) {
+    pthread_create(&thread, NULL, &run, NULL);
+    // ...
+    pthread_join(thread, NULL);
+    // ...
+    return 0;
+  }
+  ```
+
+  ***Q:*** in what order will the thread vs. `main` code run? {.lr}
+  > ***A:*** it is indeterminant (although in most cases `main` will run first) {.lg}
+
+### 16.3.3. `pthread_exit`
+- NOTE: `start_routine` returning is equivalent of calling `pthread_exit`
+  - analogous to returning from `main` & calling `exit`
+- `pthread_exit` is called implicitly when the `start_routine` of a thread returns
+- **if `pthread_exit`, the process won't exit until all other threads have finished executing!**
+```c
+void pthread_exit(void *retval);
+```
+
+- `retval` -- return value passed to function that calls `pthread_join`
+
+## 16.4. DETACHED Threads
+
+- Joinable (default) threads
+  - wait for `pthread_join` call before they release their resources
+- **DETACHED Threads**
+  - release resources when execution finishes
+
+### 16.4.1. `pthread_detach`
+- Returns 0 on success, error number otherwise
+- Calling `pthread_detach` on an already-detached thread is undefined behaviour
+```c
+int pthread_detach(pthread_t thread);
+```
+- `thread` -- marks the thread as detached
+
+#### 16.4.1.1. `pthread_attr_setdetachstate`
+```c
+pthread_attr_setdetachstate(&attributes,
+                            PTHREAD_CREATE_JOINABLE);
+                        //  PTHREAD_CREATE_DETACHED);
+```
+- an alternative way to set a thread state to joinable or detached
+
+### 16.4.2. PRACTICE
+
+- ***Q:*** what will the following code print & why? {.lr}
+  ```c
+  // detached-error.c
+
+  #include <pthread.h>
+  #include <stdio.h>
+
+  void* run(void*) {
+    printf("In run\n");
+    return NULL;
+  }
+
+  int main() {
+    pthread_t thread;
+    pthread_create(&thread, NULL, &run, NULL);
+    pthread_detach(thread);
+    printf("In main\n");
+  }
+  ```
+
+> ***A:*** prints `"In main"` only  {.lg}
+
+***Q:*** how do we get thread print statement to show up given that we can't call `pthread_join` on the detached thread? {.lr}
+> ***A:*** call `pthread_exit(NULL);` after the `printf("In main\n");` so that [the process does not exit until all threads have finished running](#pthread_exit) {.lg}
+
+***Q:*** can you call `pthread_detach` in the function for that very thread? {.lr}
+> ***A:*** yes; use `pthread_self` to get a reference to the running thread as a parameter to `pthread_detach` so that the thread detaches itself. {.lg}
+
+***Q:*** is it faster to create threads or processes? {.lr}
+> ***A:*** it is faster to create threads because their shared memory means a smaller resource requirement (see [THREADS vs. PROCESSES](#threads
+)) {.lg}
+
+## 16.5. Using ATTRIBUTES To Get/Set Thread Variables
+```c
+// stack-size.c
+
+#include <pthread.h>
+#include <stdio.h>
+
+size_t stacksize;
+pthread_attr_t attributes;
+pthread_attr_init(&attributes);
+pthread_attr_getstacksize(&attributes, &stacksize);
+printf("Stack size = %i\n", stacksize);
+pthread_attr_destroy(&attributes);
+```
+
+- Running the above should show a stack size of 8 MiB
+
+## 16.6. Multiple Threads Example
+```c
+// multiple-thread-example.c
+
+#include <errno.h>
+#include <pthread.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/types.h>
+#include <unistd.h>
+
+void* run(void* arg) {
+    int id = *((int *) arg);
+    free(arg); // since we no longer need pointer, we can free it
+    for (int i = 0; i < 10; ++i) {
+        printf("Thread %d: %d\n", id, i);
+        usleep(1000);
+    }
+    return NULL;
+}
+
+int new_thread(int id) {
+    int * arg = (int *) malloc(sizeof(int));
+    *arg = id;
+    pthread_t thread;
+    int rc = pthread_create(&thread, NULL, run, arg);
+    return rc;
+}
+
+int main() {
+  for (int i = 1; i <= 4; ++i) {
+    int err = new_thread(i);
+    if (err != 0) {
+        return err;
+    }
+  }
+  pthread_exit(0);
+  return 0;
+}
+```
+
+```
+OUTPUT
+```
+```
+Process 1: 1
+Process 2: 1
+Process 3: 1
+Process 4: 1
+Process 1: 2
+Process 3: 1
+...
+```
+
+***Q:*** how is this similar to `multiple-fork-example.c` (<<ADD LINK>>)? {.lr}
+> ***A:*** need to be able to pass a variable to a thread; only way we can do that is through a pointerk {.lg}
