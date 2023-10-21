@@ -225,6 +225,22 @@
     - [16.4.2. PRACTICE](#1642-practice)
   - [16.5. Using ATTRIBUTES To Get/Set Thread Variables](#165-using-attributes-to-getset-thread-variables)
   - [16.6. Multiple Threads Example](#166-multiple-threads-example)
+- [17. Threads Implementation (2023-10-20)](#17-threads-implementation-2023-10-20)
+  - [17.1. USER vs. KERNEL Level Threads (WHERE do we implement threads?)](#171-user-vs-kernel-level-threads-where-do-we-implement-threads)
+  - [17.2. Thread Support Requires a Thread Table](#172-thread-support-requires-a-thread-table)
+  - [17.3. Threading Libraries](#173-threading-libraries)
+    - [17.3.1. User-\>Kernel Thread MAPPING IMPLEMENTATIONS](#1731-user-kernel-thread-mapping-implementations)
+      - [17.3.1.1. MANY-TO-ONE User-Kernel Threads](#17311-many-to-one-user-kernel-threads)
+      - [17.3.1.2. ONE-TO-ONE User-Kernel Threads](#17312-one-to-one-user-kernel-threads)
+      - [17.3.1.3. MANY-TO-MANY User-Kernel Threads](#17313-many-to-many-user-kernel-threads)
+  - [17.4. Thread Details](#174-thread-details)
+    - [17.4.1. `fork()`-ing With Threads](#1741-fork-ing-with-threads)
+    - [17.4.2. Signals Sent to a Process With Multiple Threads](#1742-signals-sent-to-a-process-with-multiple-threads)
+    - [17.4.3. Thread Pools](#1743-thread-pools)
+  - [17.5. Lab 4 Overview **(END OF MIDTERM CONTENT)**](#175-lab-4-overview-end-of-midterm-content)
+    - [17.5.1. Many-To-One State Diagram](#1751-many-to-one-state-diagram)
+    - [17.5.2. Scheduling](#1752-scheduling)
+  - [17.6. Thread Races](#176-thread-races)
 
 
 <!--------------------------------{.gray}------------------------------>
@@ -3456,25 +3472,29 @@ Threads operate on the same principle as processes, **except threads share memor
 - A process can appear like it’s executing in multiple locations at once
   - However, the OS is just context switching within a process
 - It may be easier to program concurrently (e.g., handle a web request in a new thread)
+  - >
+    ```c
+    // a single thread can be dedicated to poll for & process requests
 
-```c
-// a single thread can be dedicated to poll for & process requests; CPU will context-switch to it (according to scheduler) consistently, but also execute other processes in between
+    // CPU will context-switch to it (according to scheduler) consistently,
+    // but also execute other processes in between
 
-while (true) {
-  struct request *req = get_request();
-  create_thread(process_request, req);
-}
-```
+    while (true) {
+      struct request *req = get_request();
+      create_thread(process_request, req);
+    }
+    ```
 
 ### 16.2.4. Summary of THREADS vs. PROCESSES
 
- | PROCESS                                  | THREAD                                |
- | ---------------------------------------- | ------------------------------------- |
- | Independent code / data / heap           | Shared code / data / heap             |
- | Independent execution                    | Must live within an executing process |
- | Has its own stack and registers          | Has its own stack and registers       |
- | Expensive creation and context switching | Cheap creation and context switching  |
- | Completely removed from OS on exit Stack | removed from process on exi           |
+
+| PROCESS                                  | THREAD                                |
+| ---------------------------------------- | ------------------------------------- |
+| Independent code / data / heap           | Shared code / data / heap             |
+| Independent execution                    | Must live within an executing process |
+| Has its own stack and registers          | Has its own stack and registers       |
+| Expensive creation and context switching | Cheap creation and context switching  |
+| Completely removed from OS on exit Stack | removed from process on exi           |
 
 ## 16.3. Using Threads in C via `pthread`
 ### 16.3.1. `pthread_create`
@@ -3546,17 +3566,18 @@ int pthread_join(pthread_t thread,
   ```
 
 > ***A:*** since `pthread_join` is not called, the process exits at `return 0` instead of waiting for the thread to execute (slower than `main` because it has to setup) {.lg}
-  ```c
-  // ...
+  -
+    ```c
+    // ...
 
-  int main(void) {
-    pthread_create(&thread, NULL, &run, NULL);
-    // ...
-    pthread_join(thread, NULL);
-    // ...
-    return 0;
-  }
-  ```
+    int main(void) {
+      pthread_create(&thread, NULL, &run, NULL);
+      // ...
+      pthread_join(thread, NULL);
+      // ...
+      return 0;
+    }
+    ```
 
   ***Q:*** in what order will the thread vs. `main` code run? {.lr}
   > ***A:*** it is indeterminant (although in most cases `main` will run first) {.lg}
@@ -3701,4 +3722,151 @@ Process 3: 1
 ```
 
 ***Q:*** how is this similar to `multiple-fork-example.c` (<<ADD LINK>>)? {.lr}
-> ***A:*** need to be able to pass a variable to a thread; only way we can do that is through a pointerk {.lg}
+> ***A:*** need to be able to pass a variable to a thread; only way we can do that is through a pointer {.lg}
+
+
+
+
+
+
+
+
+<!--------------------------------{.gray}------------------------------>
+
+
+
+
+
+
+
+<hr style="border:30px solid #FFFF; margin: 100px 0 100px 0; {.gray}"> </hr>
+
+
+
+
+
+
+<!--------------------------------{.gray}------------------------------>
+<div style="page-break-after: always;"></div>
+
+# 17. Threads Implementation (2023-10-20)
+## 17.1. USER vs. KERNEL Level Threads (WHERE do we implement threads?)
+
+- User threads
+  - completely in user-space
+  - Kernel doesn’t treat your threaded process any differently
+  - no system call (all function calls) = very fast to create and destroy & no context switches
+  - BUT blocking -- if one thread blocks, it blocks the entire process (kernel can’t distinguish); no kernel support
+
+- Kernel threads
+  - are implemented in kernel-space
+  - Kernel manages everything for you, and can treat threads specially
+- creation involves system calls = slower
+- BUT non-blocking -- if one thread blocks, the kernel can schedule another one (useful with multiple CPU cores)
+
+## 17.2. Thread Support Requires a Thread Table
+- Similar to the process table we saw previously
+  - could be in user-space or kernel-space
+- For user threads, there also needs to be a run-time system to determine scheduling
+
+## 17.3. Threading Libraries
+- Map user threads to kernel threads
+  - all threading libraries run in user-mode
+
+### 17.3.1. User->Kernel Thread MAPPING IMPLEMENTATIONS
+- Many-to-one: threads completely implemented in user-space that map to a single kernel thread
+  - the kernel only sees one process with one thread
+  - pure user-space implementation
+- One-to-one: one user thread maps directly to one kernel thread
+  - the kernel handles everything
+  - just uses the kernel thread implementation
+- Many-to-many: many user-level threads map to many kernel level threads
+  - hybrid of Many-to-one & One-to-one (e.g. 64 user threads map to 8 kernel threads)
+
+#### 17.3.1.1. MANY-TO-ONE User-Kernel Threads
+
+- PROS {.lg}
+  - fast (as outlined before) and portable
+  - doesn’t depend on the system, it’s just a library
+- CONS {.lr}
+  - one thread blocking causes all threads to block
+  - we cannot execute threads in parallel (kernel will only schedule a process to run)
+
+#### 17.3.1.2. ONE-TO-ONE User-Kernel Threads
+
+**How It Works:** uses a thin wrapper around the system calls to make it easier to use (actual implementation used in Linux).
+
+- PROS {.lg}
+  - exploits the full parallelism of your machine (kernel can schedule multiple threads simultaneously)
+- CONS {.lr}
+  - need to use a slower system call interface ==> lose some control
+
+#### 17.3.1.3. MANY-TO-MANY User-Kernel Threads
+
+**How It Works:** since there are typically more user-level threads than kernel-level threads, we can cap the number of kernel-level threads to the number we could run in parallel.
+(e.g. 64 user threads map to 8 kernel threads --> if one kernel thread blocks, the other 7 kernel threads can continue running)
+
+- PROS {.lg}
+  - we can get the most out of multiple CPUs
+  - reduce the number of system calls compared to [many-to-many](#many-to-many-user-kernel-threads) ([one-to-one](#one-to-one-user-kernel-threads) doesn't use **any** system calls, so this is still slower than that)
+- CONS {.lr}
+  - leads to a complicated thread library
+  - may randomly block other threads
+
+## 17.4. Thread Details
+### 17.4.1. `fork()`-ing With Threads
+Linux only copies the single thread that called `fork()` into a new process
+- need to recreate new threads
+- if it hits `pthread_exit` it’ll always exit with status 0
+- there’s `pthread_atfork` (not covered in this course) to control what happens
+
+### 17.4.2. Signals Sent to a Process With Multiple Threads
+Linux will just pick one random thread to handle the signal
+- Linux will just pick one random thread to handle the signal
+  - Makes concurrency hard, any thread could be interrupted
+  - need to make sure all threads can handle all signals
+
+### 17.4.3. Thread Pools
+Alternative way to achieve same goal as many-to-many thread mapping: avoid thread creation costs (i.e. slow system calls).
+
+1. A thread pool creates a certain number of threads and a queue of tasks (e.g. as many threads as CPUs in the system)
+2. As requests come in, wake them up and give them work to do
+3. Reuse them, when there’s no work, put them to sleep
+
+## 17.5. Lab 4 Overview **(END OF MIDTERM CONTENT)**
+### 17.5.1. Many-To-One State Diagram
+```mermaid
+graph LR
+	1A(("START")) --> 2["Created"]
+	2 --> |"`wut_create`"| 3["Waiting"]
+
+	3 --> 4["Running"]
+	4 --> |"`wut_yield`"| 3
+
+   4 --> |"`wut_exit`"| 5["Terminated"]
+   4 --> |"`wut_join`"| 6["Blocked"]
+   6 --> 3
+```
+
+### 17.5.2. Scheduling
+Use [Round-Robin](#944-rr-round-robin):
+- create a queue (list), run the thread at the front, when it yields at it to the back (FIFO)
+  - handle edge cases (e.g. if yields and nothing running, simply run that process again)
+- you’ll have to do the context switch (remember, you’ll have to save the registers)
+- these are cooperative threads, so they have to be nice (next is preemptive threads)
+
+## 17.6. Thread Races
+TLDR:
+- `++counter` actually does 3 things (load register, increment, save to register); two simulataneously-executing thread can load the same value by executing the load register part after one another (via context switching), resulting in a race condition
+- the fewer executions of thread code (e.g. `for(...; i < 2)` vs. `for(...; i < 10000)`), the less likely a race condition occurs, **but the bug is still there & it can still occur**
+- one way to bypass race conditions is have each thread have a local copy of the data (e.g. an array containing an index for each thread), then combine all thread return values after joining
+- creating a thread and then immediately joining a thread (i.e. in the same loop; see below) basically just serializes the data processing code (means no data races, but less efficient than single-threading because of the overhead in creating processes):
+  - >
+    ```c
+    // ...
+    for (i = 0; i < NUM_THREADS; ++i) {
+       pthread_create(...);
+       pthread_join(...);
+    }
+    // ...
+    ```
