@@ -210,6 +210,7 @@
   - [16.1. CONCURRENCY vs. PARALLELISM](#161-concurrency-vs-parallelism)
   - [16.2. THREADS vs. (FORKED) PROCESSES](#162-threads-vs-forked-processes)
     - [16.2.1. Threads as Processes With Shared Memory](#1621-threads-as-processes-with-shared-memory)
+      - [16.2.1.1. Memory Diagram of a Process With Multiple Threads](#16211-memory-diagram-of-a-process-with-multiple-threads)
     - [16.2.2. Each Process Can Have Multiple Threads](#1622-each-process-can-have-multiple-threads)
     - [16.2.3. Thread Concurrency Using A Single CPU](#1623-thread-concurrency-using-a-single-cpu)
     - [16.2.4. Summary of THREADS vs. PROCESSES](#1624-summary-of-threads-vs-processes)
@@ -241,6 +242,10 @@
     - [17.5.1. Many-To-One State Diagram](#1751-many-to-one-state-diagram)
     - [17.5.2. Scheduling](#1752-scheduling)
   - [17.6. Thread Races](#176-thread-races)
+- [18. Lab 4 Helper Libraries: `ucontext` \& `TAILQ`](#18-lab-4-helper-libraries-ucontext--tailq)
+  - [18.1. `ucontext-example.c` (Threading Library)](#181-ucontext-examplec-threading-library)
+  - [18.2. `tailq-example.c` (Linked List Library)](#182-tailq-examplec-linked-list-library)
+  - [18.3. PRACTICE](#183-practice)
 
 
 <!--------------------------------{.gray}------------------------------>
@@ -3460,6 +3465,10 @@ Threads operate on the same principle as processes, **except threads share memor
 - this memory has the same address space, so changes appear in each thread
   - need to explicitly declare memory specific to some thread if needed (TLS)
 
+#### 16.2.1.1. Memory Diagram of a Process With Multiple Threads
+
+![Alt text](image-8.png)
+
 ### 16.2.2. Each Process Can Have Multiple Threads
 
 - By default, a process just executes code in its own address space (i.e. **just one thread at start!**)
@@ -3870,3 +3879,372 @@ TLDR:
     }
     // ...
     ```
+
+```c
+// pthread-datarace.c
+
+#include <pthread.h>
+#include <stdio.h>
+
+#define NUM_THREADS 8
+
+static int counter = 0;
+
+void* run(__attribute__((unused)) void* arg) {
+    int i;
+    for (i = 0; i < 10000; ++i) {
+        ++counter;
+    }
+    return NULL;
+}
+
+int main(void) {
+    pthread_t thread[NUM_THREADS];
+    int i;
+    for (i = 0; i < NUM_THREADS; ++i) {
+        pthread_create(&thread[i], NULL, &run, NULL);
+    }
+
+    for (i = 0; i < NUM_THREADS; ++i) {
+        pthread_join(thread[i], NULL);
+    }
+
+    printf("counter = %i\n", counter);
+    return 0;
+}
+```
+
+
+
+
+
+
+
+
+
+
+<!--------------------------------{.gray}------------------------------>
+
+
+
+
+
+
+
+<hr style="border:30px solid #FFFF; margin: 100px 0 100px 0; {.gray}"> </hr>
+
+
+
+
+
+
+<!--------------------------------{.gray}------------------------------>
+<div style="page-break-after: always;"></div>
+
+# 18. Lab 4 Helper Libraries: `ucontext` & `TAILQ`
+## 18.1. `ucontext-example.c` (Threading Library)
+
+```c
+// ucontext-example.c
+
+#include <errno.h> // errno
+#include <stddef.h> // NULL
+#include <stdio.h> // perror
+#include <stdlib.h> // exit
+#include <sys/mman.h> // mmap, munmap
+#include <sys/signal.h> // SIGSTKSZ
+#include <ucontext.h> // getcontext, makecontext, setcontext, swapcontext
+#include <valgrind/valgrind.h> // VALGRIND_STACK_REGISTER
+
+static void die(const char* message);
+static char* new_stack(void);
+static void delete_stack(char* stack);
+static void t2_run(void);
+static void t1_run(int arg0);
+
+// ---------------------------------------------------
+
+// setup 3 threads
+static ucontext_t t0_ucontext;
+static ucontext_t t1_ucontext;
+static ucontext_t t2_ucontext;
+
+// setup 2 stacks
+// no stack for t0 since we will have that has the main thread
+static char* t1_stack;
+static char* t2_stack;
+
+int main(void) {
+
+    int x = 0;
+
+    /* Initializes the ucontext with the current thread, this copies all its
+     * registers, and a pointer to its stack (the default kernel allocated one).
+     * Will allow for context-switching.
+     */
+    getcontext(&t0_ucontext);
+
+    printf("Code after `getcontext` above rexecutes after `setcontext-ing");
+    printf("That means this runs again!");
+
+    ++x; // since x was declared before `getcontext`, it will keep incrementing (not resetting back to 0+1)
+    printf("%d", x); // prints incremented x
+
+
+    /* If we setcontext or swapcontext to t0_context, it'll be as if we just
+     * returned from that getcontext call. If you uncomment the line below
+     * you'll be in an infinite loop! (Assume this line is commented for below code)
+     *
+     * Sets everything back to how it was when the last time getcontext was called to save registers.
+     * Sets everything back to how it was when the last time getcontext was called to save registers.
+     */
+    /* ASSUME COMMENTED FOR CODE BELOW */ setcontext(&t0_ucontext);
+
+    // ----------------------------------------------------------
+
+    /* Let's create a context that'll execute the run function */
+    t1_stack = new_stack();
+    getcontext(&t1_ucontext);
+
+    // set stack pointer to point to a specific stack
+    t1_ucontext.uc_stack.ss_sp = t1_stack;
+    t1_ucontext.uc_stack.ss_size = SIGSTKSZ;
+
+    /* ...UNCOMMENT THE LINE ABOVE, then it will switch to another context when this one ends.
+     * By default the process will just exit if a thread makes it to the end
+     * of the function.
+     *
+     * With this `uc_link`, `set_context` is automatically called on the
+     * stack of `&t0_ucontext` instead of exiting
+     *
+     * when t1 exists, switches to thread 2
+     * basically just calls `t1_run()` in an infinite loop
+     */
+    /* ASSUME COMMENTED FOR CODE BELOW */ t1_ucontext.uc_link = &t2_ucontext;
+
+    // with this, we're making the below happen when `setcontext` is used
+    // instead of rerunning lines of code from whereever `getcontext` was called
+    // (we can also pass as many int arguments as we want)
+    makecontext(
+        &t1_ucontext, /* The ucontext to use, it must be initialized with
+                       * getcontext
+                       */
+        (void (*)(void)) t1_run, /* The function to start executing */
+        1, /* This is how many arguments we're going to pass to the function */
+        42 /* This is the argument we pass, we can only pass `int`s */
+    );
+
+    // when this line is reached, will call `t1_run()` with arg 42
+    // (as setup in `makecontext` above)
+    /* ASSUME COMMENTED FOR CODE BELOW */ setcontext(&t1_ucontext);
+    // if we don't do anything else, the process will just exit after running
+    // `t1_run`; IF WE UNCOMMENT THE LINE ABOVE...
+
+    // ----------------------------------------------------------
+
+    // setup thread 2
+
+    t2_stack = new_stack();
+    getcontext(&t2_ucontext);
+
+    t2_ucontext.uc_stack.ss_sp = t2_stack;
+    t2_ucontext.uc_stack.ss_size = SIGSTKSZ;
+
+    makecontext(&t2_ucontext,  t2_run,  0);
+
+    /* If we just setcontext here when we run T2 after T1 finishes, we'll
+     * get into an infinite loop again. */
+    /* ASSUME COMMENTED FOR CODE BELOW */ setcontext(&t1_ucontext);
+
+    swapcontext(&t0_ucontext, &t1_ucontext); // basically starts executing thread 1
+    // is equivalent to:
+    // `getcontext(&t0_ucontext);` --> t0 would resume here
+    // `setcontext(&t1_ucontext);`
+
+    // after running t1_run, uc_link causes an automatic setcontext
+    // to thread 2 (t2_run), which deletes the thread 1 stack
+    // & setcontexts to t0 (which means it resumes here! Since getcontext was just called on t0 via swapcontext)
+
+    printf("Main is back in town\n");
+    delete_stack(t2_stack);
+
+    return 0;
+}
+
+// ----------------------------------------------------------
+
+/* prints whatever argument is passed from our `makecontext()` */
+static void t1_run(int arg0) {
+    printf("Hooray! Got arg0: %d\n", arg0);
+    // implicitly does: `setcontext(t0)` if we uncomment `uc_link`
+}
+
+static void t2_run(void) {
+    printf("T2 should be done, switch back to T0\n");
+    delete_stack(t1_stack);
+    // will basically inf loop by resuming where `getcontext(&t0_ucontext)`
+    // was run at the top of `main()`
+    setcontext(&t0_ucontext);
+}
+
+// ----------------------------------------------------------
+
+// use to allocate a stack for a new user thread
+static char* new_stack(void) {
+    char* stack = mmap(
+        NULL,
+        SIGSTKSZ,
+        PROT_READ | PROT_WRITE | PROT_EXEC,
+        MAP_ANONYMOUS | MAP_PRIVATE,
+        -1,
+        0
+    );
+    if (stack == MAP_FAILED) {
+        die("mmap stack failed");
+    }
+    // `VALGRIND_STACK_REGISTER` is for using valgrind on threads
+    // `SIGSTKSZ` is just default stack size
+    VALGRIND_STACK_REGISTER(stack, stack + SIGSTKSZ);
+    return stack;
+}
+
+static void delete_stack(char* stack) {
+    if (munmap(stack, SIGSTKSZ) == -1) {
+        die("munmap stack failed");
+    }
+}
+
+static void die(const char* message) {
+    int err = errno;
+    perror(message);
+    exit(err);
+}
+
+```
+
+- ***Q:*** what happens if we declare `int x = 0;` after `getcontext()`? {.lr}
+- ***A:*** {.lg}
+  - `setcontext()` sets the stack pointer to point to whatever stack register (each 4 bytes) it was when `getcontext()` was called
+  - when the next line is executed, the stack pointer increments by 4 bytes to get to the next stack register
+  - `int x = 0;` overwrites the previous declaration of itself, then it increments, and then it prints, so it will always print 0
+
+***Q:*** is it possible to get a stack overflow error using out setup of `getcontext()` & `setcontext()`? {.lr}
+> ***A:*** no; we are not increasing the stack, but merely making the stack pointer point to some stack register that it pointed to previously. {.lg}
+
+## 18.2. `tailq-example.c` (Linked List Library)
+
+Note: only thing that should be in your linked list for the lab is your ready queue.
+- You shuold probably not have your process control block as part of a linked list, since all you need to do is keep track of whatever the IDs of the threads are in your waiting or ready queue
+
+```c
+// tailq-example.c
+
+#include <assert.h>
+#include <stdio.h>
+#include <sys/queue.h>
+
+struct list_entry {
+    int id;
+    TAILQ_ENTRY(list_entry) pointers; // to next, prev
+};
+// list head doesn't have id,
+// just pointers to the front & back of the list
+TAILQ_HEAD(list_head, list_entry);
+static struct list_head list_head;
+
+void print_list(void) {
+    printf("List:");
+    struct list_entry* e;
+    TAILQ_FOREACH(e, &list_head, pointers) {
+        printf(" %d", e->id);
+    }
+    printf("\n");
+}
+
+void print_list_last(void) {
+    struct list_entry* e = TAILQ_LAST(&list_head, list_head);
+    printf("List last: %d\n", e->id);
+}
+
+int main(void) {
+    TAILQ_INIT(&list_head);
+    assert(TAILQ_EMPTY(&list_head));
+
+    struct list_entry e1;
+    e1.id = 1;
+    TAILQ_INSERT_TAIL(&list_head, &e1, pointers);
+    printf("Inserted 1\n");
+    print_list();
+
+    struct list_entry e2;
+    e2.id = 2;
+    TAILQ_INSERT_TAIL(&list_head, &e2, pointers);
+    printf("\nInserted 2\n");
+    print_list();
+    print_list_last();
+
+    TAILQ_REMOVE(&list_head, &e1, pointers);
+    printf("\nRemoved 1\n");
+    print_list();
+
+    return 0;
+}
+```
+
+## 18.3. PRACTICE
+
+***Q:*** Given the following code, what happens if one kernel thread calls `set_contact(&uA)`? {.lr}
+```c
+// global variables
+
+int i = 0;
+ucontext_t uA; // initializaed to execute thread_a()
+ucontext_t uB; // initializaed to execute thread_a()
+```
+
+```c
+void thread_a() {
+  int d = 0; // vs. = 1
+  while (i < 3) {
+    i++;
+    printf("A: %s\n", i);
+    d = 0;
+    getcontext(&uA); // vs. ...(&uB)
+    if (d == 0) {
+      d = 1;
+      setcontext(&uB); // vs. ...(&uA)
+    }
+  }
+}
+```
+
+```c
+void thread_b() {
+  int d = 1; // vs. = 0
+  while (i < 3) {
+    i++;
+    printf("B: %s\n", i);
+    d = 0;
+    getcontext(&uB); // vs. ...(&uA)
+    if (d == 0) {
+      d = 1;
+      setcontext(&uA); // vs. ...(&uB)
+    }
+  }
+}
+```
+
+-  ***A:*** what you need to know... {.lg}
+   - `getcontext()` only saves the stack pointer, not anything on the stack
+      - `i` is shared between both threads since declared before threads (i.e. global variable)
+      - `d` is unique to each thread (since declared in each thread's stack)
+   - `uA` & `uB` are *different* ucontext thread variables
+     - i.e. `getcontext(&uA)` & `getcontext(&uB)` are saving the stack pointer to two different variables
+     - i.e. `setcontext(&uA)` & `setcontext(&uB)` are setting the stack pointer to two different location
+   - no `uc_link`, so when the end of a thread is reached, the process simply terminates
+   - program prints: {.g}
+     ```c
+     A: 1
+     B: 2
+     C: 3
+     ```
