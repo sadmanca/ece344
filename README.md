@@ -260,6 +260,19 @@
     - [19.4.4. Similar to Libraries, You Want Layers of Synchronization](#1944-similar-to-libraries-you-want-layers-of-synchronization)
   - [19.5. DIY Locks Using a Single CPU/Thread](#195-diy-locks-using-a-single-cputhread)
     - [19.5.1. DIY Locks in C](#1951-diy-locks-in-c)
+- [20. Locks Implementation (2023-10-24)](#20-locks-implementation-2023-10-24)
+  - [20.1. Minimal Hardware Requirements for Locks](#201-minimal-hardware-requirements-for-locks)
+  - [20.2. Steps to Build a DIY Lock](#202-steps-to-build-a-diy-lock)
+    - [20.2.1. DIY Spinlock via Adding `compare_and_swap()` To Our Naive Implementation](#2021-diy-spinlock-via-adding-compare_and_swap-to-our-naive-implementation)
+    - [20.2.2. Adding a Yield](#2022-adding-a-yield)
+    - [20.2.3. Adding a Wait Queue](#2023-adding-a-wait-queue)
+      - [20.2.3.1. Lost Wakeup Example](#20231-lost-wakeup-example)
+      - [20.2.3.2. Wrong Thread Getting the Lock Example](#20232-wrong-thread-getting-the-lock-example)
+    - [20.2.4. Add Lock \& Guard Variables to Fix Wait Queue Issues](#2024-add-lock--guard-variables-to-fix-wait-queue-issues)
+  - [20.3. Read-Write Locks](#203-read-write-locks)
+    - [20.3.1. Why Read-Write Locks Can Exist](#2031-why-read-write-locks-can-exist)
+    - [20.3.2. Read-Write Lock Details](#2032-read-write-lock-details)
+    - [20.3.3. Using a Guard Variable to Keep Track of Readers](#2033-using-a-guard-variable-to-keep-track-of-readers)
 
 
 <!--------------------------------{.gray}------------------------------>
@@ -4455,3 +4468,234 @@ void unlock(int *l) {
 - ***A:***  {.lg}
   - not safe  -- both threads can be in the critical section
   - not efficient -- polling wastes CPU cycles
+
+
+
+
+
+
+
+
+<!--------------------------------{.gray}------------------------------>
+
+
+
+
+
+
+
+<hr style="border:30px solid #FFFF; margin: 100px 0 100px 0; {.gray}"> </hr>
+
+
+
+
+
+
+<!--------------------------------{.gray}------------------------------>
+<div style="page-break-after: always;"></div>
+
+# 20. Locks Implementation (2023-10-24)
+## 20.1. Minimal Hardware Requirements for Locks
+Hardware requirements just have to ensure:
+1. Loads and stores are atomic
+2. Instructions execute in order
+
+Main algorithms used for implementing locks in software (with minimal hardware) are the following, but *they don't scale well & processors execute out-of-order:*{.lr}
+- Peterson's algorithm
+- Lamport's bakery algorithm
+
+## 20.2. Steps to Build a DIY Lock
+### 20.2.1. DIY Spinlock via Adding `compare_and_swap()` To Our Naive Implementation
+Consider an atomic `compare_and_swap(int *p, int old, int new)` that:
+- returns the original value pointed to
+- only swaps if the original value equals `old`, and changes it to `new`
+- *is a common atomic hardware instruction (`cmpxchq` on x86)*
+
+We can rewrite our DIY lock as follows:
+```c
+void init(int *l) {
+  *l = 0;
+}
+void lock(int *l) {
+  // previously: `while (*l == 1);`
+  while (compare_and_swap(l, 0, 1));
+}
+void unlock(int *l) {
+  *l = 0;
+}
+```
+
+***Q:*** what are the disadvantages of this system? {.lr}
+> ***A:*** still is inefficient due to polling {.lg}
+
+***Q:*** what if you can't get the lock? {.lr}
+- ***A:*** {.lg}
+  - on uniprocessor machine: yield; let the kernel schedule another process, that may free the lock
+  - on multiprocesso machine: try again
+
+### 20.2.2. Adding a Yield
+```c
+// ...
+void lock(int *l) {
+  while (compare_and_swap(l, 0, 1)) {
+    thread_yield();
+  }
+}
+// ...
+```
+
+**ISSUES:**
+- Now we have a **thundering herd** problem
+  - multiple threads may be waiting on the same lock
+- We have no control over who gets the lock next
+  - We need to be able to reason about it (FIFO is okay)
+
+### 20.2.3. Adding a Wait Queue
+```c
+void lock(int *l) {
+  while (compare_and_swap(l, 0, 1)) {
+    // add myself to the lock wait queue
+    thread_sleep();
+  }
+}
+void unlock(int *l) {
+  *l = 0;
+  if (/* threads in wait queue */) {
+    // wake up one thread
+  }
+}
+```
+
+**ISSUES:**
+1. lost wakeup
+2. wrong thread gets the lock
+
+#### 20.2.3.1. Lost Wakeup Example
+Assume we have thread 1 (T1) and thread 2 (T2), thread 2 holds the lock
+- T1 runs line 2 and fails, swap to T2 that runs lines 10-12, T1 runs lines 3-4
+  - T1 will never get woken up!
+
+```c
+void lock(int *l) {
+  while (compare_and_swap(l, 0, 1)) {
+    // add myself to the wait queue
+    thread_sleep();
+  }
+}
+void unlock(int *l) {
+  *l = 0;
+  if (/* threads in wait queue */) {
+    // wake up one thread
+  }
+}
+```
+
+#### 20.2.3.2. Wrong Thread Getting the Lock Example
+Assume we have T1, T2, and T3. T2 holds the lock, T3 is in queue.
+- T2 runs line 9, swap to T1 which runs line 2 and succeeds
+  - T1 just stole the lock from T3!
+```c
+void lock(int *l) {
+  while (compare_and_swap(l, 0, 1)) {
+    // add myself to the wait queue
+    thread_sleep();
+  }
+}
+void unlock(int *l) {
+  *l = 0;
+  if (/* threads in wait queue */) {
+    // wake up one thread
+  }
+}
+```
+
+### 20.2.4. Add Lock & Guard Variables to Fix Wait Queue Issues
+```c
+typedef struct { int lock; int guard;
+                 queue_t *q; } mutex_t;
+```
+```c
+void lock(mutex_t *m) {
+  while (
+    compare_and_swap(m->guard, 0, 1)
+  );
+  if (m->lock == 0) {
+    m->lock = 1; // acquire mutex
+    m->guard = 0;
+  } else {
+    enqueue(m->q, self);
+    m->guard = 0;
+    thread_sleep();
+    // wakeup transfers the lock here
+  }
+}
+```
+```c
+void unlock(mutex_t *m) {
+  while (
+    compare_and_swap(m->guard, 0, 1)
+  );
+  if (queue_empty(m->q)) {
+    // release lock, no one needs it
+    m->lock = 0;
+  }
+  else {
+    // direct transfer mutex
+    // to next thread
+    thread_wakeup(dequeue(m->q));
+  }
+  m->guard = 0;
+}
+```
+
+ISSUES: **still** a data race
+- After a thread calls lock, it could get interrupted right before the `thread_sleep`
+- However, it’s been added to the wait queue, so `thread_wakeup` would try to wake up a thread that’s not sleeping yet (we know it’s about to)
+- We could simply retry the call to `thread_wakeup` until the thread finally calls `thread_sleep`
+
+## 20.3. Read-Write Locks
+### 20.3.1. Why Read-Write Locks Can Exist
+RECALL: a data race is when two concurrent actions access the same variable & at least one of them is a **WRITE**
+- means we could have any many readers as we want (don’t need a mutex as long as nothing writes at the same time)
+- need different lock modes for reading and writing
+
+### 20.3.2. Read-Write Lock Details
+- With mutexes/spinlocks, you have to lock the data, even for a read since you don’t know if a write could happen; *don't need to lock for reads using read-write locks*
+- Reads can happen in parallel, as long as there’s no write
+- Multiple threads can hold a read lock (`pthread_rwlock_rdlock`), but only one thread may hold a write lock (`pthread_rwlock_wrlock`) and will wait until the current readers are done
+
+### 20.3.3. Using a Guard Variable to Keep Track of Readers
+```c
+typedef struct {
+  int nreader;
+  lock_t guard;
+  lock_t lock;
+} rwlock_t;
+
+void write_lock(rwlock_t *l) {
+  lock(&l->lock);
+}
+
+void write_unlock(rwlock_t *l) {
+  unlock(&l->lock);
+}
+```
+```c
+void read_lock(rwlock_t *l) {
+  lock(&l->guard);
+  ++nreader;
+  if (nreader == 1) { // first reader
+    lock(&l->lock);
+  }
+  unlock(&l->guard);
+}
+
+void read_unlock(rwlock_t *l) {
+  lock(&l->guard);
+  --nreader;
+  if (nreader == 0) { // last reader
+    unlock(&l->lock);
+  }
+  unlock(&l->guard);
+}
+```
