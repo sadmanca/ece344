@@ -2070,7 +2070,7 @@ graph LR;
 
 > ***A:*** assuming ${P_1} \rightarrow {P_2} \rightarrow {P_3} \rightarrow {P_4}$, the process schedule is... {.lg}
 
-![](2023-09-28-12-47-45.png)
+![](images/2023-09-28-12-47-45.png)
 
 > ---
 
@@ -2084,7 +2084,7 @@ graph LR;
 
 > ***A:*** now ${P_4} \rightarrow {P_3} \rightarrow {P_2} \rightarrow {P_1}$, ... {.lg}
 
-![](2023-09-28-12-56-07.png)
+![](images/2023-09-28-12-56-07.png)
 
 ***Q: d)*** what is the average waiting time *if the process arrival order is inverted*? {.lr}
 
@@ -2119,7 +2119,7 @@ graph LR;
   - after $P_1$ ends, the scheduler runs the process with the shortest burst time amongst the queued processes ($P_3$ out of $P_2$-$P_4$)
   - $P_2$ & $P_4$ have the same burst time, but $P_2$ arrived first so it runs before $P_4$
 
-![](2023-10-02-00-10-22.png)
+![](images/2023-10-02-00-10-22.png)
 
 > ---
 
@@ -2151,7 +2151,7 @@ graph LR;
     - after the new interrupting process finishes, execution returns to the process it interrupted (e.g. from $P_3$ back to $P_2$, back to $P_1$)
     - if a newly arrived process does *not* have a shorter burst time than the currently running process, it waits on the queue
 
-![](2023-10-02-00-31-46.png)
+![](images/2023-10-02-00-31-46.png)
 
 ### 9.4.4. (RR) Round-Robin
 - OS divides execution into time slices/quanta for each process based on fairness (more important process = larger time slice)
@@ -2191,7 +2191,7 @@ Scheduling Algorithms Involve Different Trade-Offs:
 
 > ***A:*** {.lg}
 
-![](2023-10-02-00-43-56.png)
+![](images/2023-10-02-00-43-56.png)
 
 > ---
 
@@ -2202,7 +2202,7 @@ Scheduling Algorithms Involve Different Trade-Offs:
   - **TRICK:** for each process, $\text{waiting time}_{P_i} = \text{completion time} - \text{arrival time} - \text{num units } P_i \text{ ran for}$
     - e.g. for $P_1$:  $\text{waiting time}_{P_i} = 15 - 0 - 7 = 8$
     - highlighted in yellow: $7 = \text{num units } P_i \text{ ran for}$
-    - ![](2023-10-02-00-51-57.png)
+    - ![](images/2023-10-02-00-51-57.png)
 
 > ---
 
@@ -2221,13 +2221,13 @@ Scheduling Algorithms Involve Different Trade-Offs:
 ***Q: e)*** how many context switches occurred? {.lr}
 > ***A:*** $7$ {.lg}
 
-![](2023-10-02-01-19-09.png)
+![](images/2023-10-02-01-19-09.png)
 
 > ---
 
 ***Q: e)*** given the previous process info, what are the process schedule, avg. waiting time, avg. response time, & number of context switches **GIVEN A QUANTUM LENGTH OF $1$**{.r}? {.lr}
 
-![](2023-10-02-01-22-14.png)
+![](images/2023-10-02-01-22-14.png)
 
 > ---
 
@@ -2246,7 +2246,7 @@ Scheduling Algorithms Involve Different Trade-Offs:
   - avg. response time - (0+5+7+7)/4 = 4.75
   - ^METRICS WERE SAME AS FCFS W/O PREEMPTIONS!
 
-![](2023-10-02-01-25-23.png)
+![](images/2023-10-02-01-25-23.png)
 
 
 
@@ -2374,7 +2374,7 @@ Assign each new process to 1/n available CPUs (with the lowest number of process
 
 ### 10.3.7. How Linux Priority Unifies Soft Real-time & Normal Processes
 
-![](2023-10-03-00-37-17.png)
+![](images/2023-10-03-00-37-17.png)
 
 ## 10.4. IFS (Ideal Fair Scheduling)
 Divide CPU usage equally among every process:
@@ -2392,7 +2392,7 @@ e.g. consider the following process info:
 | $P_4$   | 0            | 4          |
 
 If each box represents the time units spend executing, then each vertical slice can execute 4 time units:
-![](2023-10-03-00-25-50.png)
+![](images/2023-10-03-00-25-50.png)
 
 - PROS
   - fairest policy (every process gets equal amount of CPU time)
@@ -2517,12 +2517,12 @@ graph LR;
 ## 11.6. Page Table
 Translates virtual to physical addresses:
 
-![Alt text](image.png)
+![Alt text](images/2023-10-03-00-39-28.png)
 
 ### 11.6.1. Page Table Entry (PTE)
 Page Table Entry (PTE) also stores flags in the lower bits:
 
-![Alt text](image-1.png)
+![Alt text](images/2023-10-03-00-42-26.png)
 
 e.g. Considering the following page table:
 
@@ -2643,11 +2643,11 @@ Shares all memory with the parent (means less overhead since page tables aren't 
 
 ### 12.1.1. Fit Page Table on a Page
 
-![Alt text](image-2.png)
+![Alt text](images/2023-10-05-12-39-28.png)
 
 ### 12.1.2. Multi-Level Page Tables (Save Space for Sparse Allocations)
 
-![Alt text](image-3.png)
+![Alt text](images/2023-10-05-12-45-24.png)
 
 - processes use a register like `satp` to set the root page table (see diagram; `satp` just points to the L2 page table)
 - procedure to translate virtual address to physical address:
@@ -2930,11 +2930,11 @@ page starting at address `0x7000` --> last byte would be at address `0x7FFF`
 ## 13.2. PRACTICE: How Many Page Tables Do We Need?
 ***Q:*** assume our program uses 512 pages; ***a)*** What's the minimum number of page tables we need? {.lr}
 - ***A:*** 3; $\text{1 page table } = 512 \text{ pages}$, so we only need 1 L0 page table (and then one L1 & one L2 table pointing to it) {.lg}
-  - ![Alt text](image-4.png)
+  - ![Alt text](images/2023-10-06-15-25-21.png)
 
 ***Q: b)*** What's the maximum number of page tables? {.lr}
 - ***A:*** 1025 $= 512 + 512 + 1$ {.lg}
-  - ![Alt text](image-5.png)
+  - ![Alt text](images/2023-10-06-15-29-31.png)
 
 
 ## 13.3. PRACTICE: How Many Levels Do I Need?
@@ -2964,7 +2964,7 @@ Want each page table to fit into a single page
 ### 13.4.2. Translation Look-Aside Buffer (TLB)
 A TLB Caches PTEs
 
-![Alt text](image-6.png)
+![Alt text](images/2023-10-06-15-31-39.png)
 
 #### 13.4.2.1. Effective Access Time (EAT)
 Assume a single page table (there's only one additional memory access in the page table)
@@ -3024,7 +3024,7 @@ This call grows or shrinks your heap (the stack has a set limit)
 
 ## 13.6. Kernel Initializes the Process' Address Space
 
-![Alt text](image-7.png)
+![Alt text](images/2023-10-06-16-31-39.png)
 
 ## 13.7. Kernel Can Provide Fixed Virtual Addresses
 Allows the process to access kernel data without using a system call
@@ -3103,7 +3103,7 @@ Time between recalculations of priority using the dynamic priority algorithm.
 
 What is the scheduling? (each box is a timer interrupt) {.lr}
 
-![Alt text](image-9.png) {.lr}
+![Alt text](images/2023-10-10-05-23-49.png) {.lr}
 
 - ***A:***  {.lg}
   1. Since each process has the same initial priority, we schedule the earliest arriving one first (X)
@@ -3116,7 +3116,7 @@ What is the scheduling? (each box is a timer interrupt) {.lr}
      - $\mathsf{P_B} = \frac{0}{2} + 0 = 0$}
     - new order of priorities (highest-->lowest): **B(0), X(1), Y(1), A(8)**
   5. since B has the highest priority, it will run for the full time interval from 10->20
-  - ![Alt text](image-10.png)
+  - ![Alt text](images/2023-10-10-05-23-57.png)
 
 ---
 
@@ -3127,7 +3127,7 @@ What is the scheduling? (each box is a timer interrupt) {.lr}
 
 What is the scheduling? (each box is a timer interrupt) {.lr}
 
-![Alt text](image.png) {.lr}
+![Alt text](images/2023-10-10-05-23-49.png) {.lr}
 
 - ***A:*** {.lg}
   1. X, Y run first from 0->1, 1->2; blocks from 1->6, 2->7
@@ -3141,7 +3141,7 @@ What is the scheduling? (each box is a timer interrupt) {.lr}
      - $\mathsf{P_B} = \frac{6}{2} + 0 = 3$;
      - new order of priorities (highest-->lowest): **X(2), Y(2), B(3), A(9)**
   5. X,Y have lower priority but still blocked, so B runs until X, Y unblocked; then after X,Y re-execute, B resumes because it has higher priority than A
-  - ![Alt text](image-11.png)
+  - ![Alt text](images/2023-10-10-05-23-59.png)
 
 ## 14.2. Memory Mapping (NOT TESTABLE)
 
@@ -3560,7 +3560,7 @@ Threads operate on the same principle as processes, **except threads share memor
 
 #### 16.2.1.1. Memory Diagram of a Process With Multiple Threads
 
-![Alt text](image-8.png)
+![Alt text](images/2023-10-13-17-41-49.png)
 
 ### 16.2.2. Each Process Can Have Multiple Threads
 
