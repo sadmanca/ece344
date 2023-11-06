@@ -17,7 +17,8 @@
     - [2.5.2. `strace`](#252-strace)
     - [2.5.3. Kernel as a Long Running Program](#253-kernel-as-a-long-running-program)
     - [2.5.4. Types of Kernels](#254-types-of-kernels)
-  - [2.6. PRACTICE](#26-practice)
+  - [2.6. SUMMARY](#26-summary)
+  - [2.7. PRACTICE](#27-practice)
 - [3. Libraries (2023-09-13)](#3-libraries-2023-09-13)
   - [3.1. Applications Use Libraries](#31-applications-use-libraries)
   - [3.2. How Libraries Are Used To Compile C Code](#32-how-libraries-are-used-to-compile-c-code)
@@ -33,7 +34,8 @@
     - [3.3.2. How Semantic Versioning Reflects Dynamic Library Changes](#332-how-semantic-versioning-reflects-dynamic-library-changes)
   - [3.4. System Calls vs. C Standard Library Functions](#34-system-calls-vs-c-standard-library-functions)
     - [3.4.1. C `atexit` (vs. System call `exit()` / `exit_group()`)](#341-c-atexit-vs-system-call-exit--exit_group)
-  - [3.5. PRACTICE:](#35-practice)
+  - [3.5. SUMMARY](#35-summary)
+  - [3.6. PRACTICE:](#36-practice)
 - [4. Process Creation (2023-09-15)](#4-process-creation-2023-09-15)
   - [4.1. Process Control Blocks (PCBs)](#41-process-control-blocks-pcbs)
   - [4.2. Process State Diagrams](#42-process-state-diagrams)
@@ -42,7 +44,8 @@
     - [4.4.1. `fork()`](#441-fork)
       - [4.4.1.1. `getpid()` \& `getppid()`](#4411-getpid--getppid)
       - [4.4.1.2. `fork()` Example](#4412-fork-example)
-  - [4.5. PRACTICE](#45-practice)
+  - [4.5. SUMMARY](#45-summary)
+  - [4.6. PRACTICE](#46-practice)
 - [5. Process Management (2023-09-16)](#5-process-management-2023-09-16)
   - [5.1. `execve()`](#51-execve)
     - [5.1.1. `execve()` Example](#511-execve-example)
@@ -58,7 +61,8 @@
       - [5.3.2.1. Zombie Example](#5321-zombie-example)
     - [5.3.3. Orphan Process](#533-orphan-process)
       - [5.3.3.1. Orphan Example](#5331-orphan-example)
-  - [5.4. PRACTICE](#54-practice)
+  - [5.4. SUMMARY](#54-summary)
+  - [5.5. PRACTICE](#55-practice)
 - [6. Basic IPC (2023-09-19)](#6-basic-ipc-2023-09-19)
   - [6.1. Reading/Writing to Files/Standard-(In/Out)](#61-readingwriting-to-filesstandard-inout)
     - [6.1.1. `cat` Terminal Example (echo input)](#611-cat-terminal-example-echo-input)
@@ -115,6 +119,8 @@
       - [9.4.3.1. Tradeoffs with SRTF](#9431-tradeoffs-with-srtf)
     - [9.4.4. (RR) Round-Robin](#944-rr-round-robin)
       - [9.4.4.1. Tradeoffs with RR](#9441-tradeoffs-with-rr)
+  - [9.5. SUMMARY](#95-summary)
+  - [9.6. PRACTICE](#96-practice)
 - [10. Advanced Scheduling (2023-09-28)](#10-advanced-scheduling-2023-09-28)
   - [10.1. Prioritizing Special Processes](#101-prioritizing-special-processes)
     - [10.1.1. Mapping Priority to Integers](#1011-mapping-priority-to-integers)
@@ -136,6 +142,7 @@
   - [10.5. CFS (Completely Fair Scheduler)](#105-cfs-completely-fair-scheduler)
     - [10.5.1. CFS Implemented via Red-Black Trees](#1051-cfs-implemented-via-red-black-trees)
       - [10.5.1.1. Red-Black Tree Refresher](#10511-red-black-tree-refresher)
+  - [10.6. SUMMARY](#106-summary)
 - [11. Virtual Memory (2023-10-03)](#11-virtual-memory-2023-10-03)
   - [11.1. Virtual Memory Requirements](#111-virtual-memory-requirements)
     - [11.1.1. Recall memory is byte addressable](#1111-recall-memory-is-byte-addressable)
@@ -206,6 +213,7 @@
     - [15.2.7. `send`/`recv` (Instead Of `read`/`write`)](#1527-sendrecv-instead-of-readwrite)
   - [15.3. Server Example](#153-server-example)
   - [15.4. Why Use Sockets?](#154-why-use-sockets)
+  - [15.5. SUMMARY](#155-summary)
 - [16. Threads (2023-10-13)](#16-threads-2023-10-13)
   - [16.1. CONCURRENCY vs. PARALLELISM](#161-concurrency-vs-parallelism)
   - [16.2. THREADS vs. (FORKED) PROCESSES](#162-threads-vs-forked-processes)
@@ -226,6 +234,7 @@
     - [16.4.2. PRACTICE](#1642-practice)
   - [16.5. Using ATTRIBUTES To Get/Set Thread Variables](#165-using-attributes-to-getset-thread-variables)
   - [16.6. Multiple Threads Example](#166-multiple-threads-example)
+  - [16.7. SUMMARY](#167-summary)
 - [17. Threads Implementation (2023-10-17)](#17-threads-implementation-2023-10-17)
   - [17.1. USER vs. KERNEL Level Threads (WHERE do we implement threads?)](#171-user-vs-kernel-level-threads-where-do-we-implement-threads)
   - [17.2. Thread Support Requires a Thread Table](#172-thread-support-requires-a-thread-table)
@@ -242,6 +251,7 @@
     - [17.5.1. Many-To-One State Diagram](#1751-many-to-one-state-diagram)
     - [17.5.2. Scheduling](#1752-scheduling)
   - [17.6. Thread Races](#176-thread-races)
+  - [17.7. SUMMARY](#177-summary)
 - [18. Lab 4 Helper Libraries: `ucontext` \& `TAILQ` (2023-10-19)](#18-lab-4-helper-libraries-ucontext--tailq-2023-10-19)
   - [18.1. `ucontext-example.c` (Threading Library)](#181-ucontext-examplec-threading-library)
   - [18.2. `tailq-example.c` (Linked List Library)](#182-tailq-examplec-linked-list-library)
@@ -261,18 +271,19 @@
   - [19.5. DIY Locks Using a Single CPU/Thread](#195-diy-locks-using-a-single-cputhread)
     - [19.5.1. DIY Locks in C](#1951-diy-locks-in-c)
 - [20. Locks Implementation (2023-10-24)](#20-locks-implementation-2023-10-24)
-  - [20.1. Minimal Hardware Requirements for Locks](#201-minimal-hardware-requirements-for-locks)
+  - [20.1. Minimal Hardware Requirements for Implementing Locks in Software](#201-minimal-hardware-requirements-for-implementing-locks-in-software)
   - [20.2. Steps to Build a DIY Lock](#202-steps-to-build-a-diy-lock)
-    - [20.2.1. DIY Spinlock via Adding `compare_and_swap()` To Our Naive Implementation](#2021-diy-spinlock-via-adding-compare_and_swap-to-our-naive-implementation)
-    - [20.2.2. Adding a Yield](#2022-adding-a-yield)
-    - [20.2.3. Adding a Wait Queue](#2023-adding-a-wait-queue)
-      - [20.2.3.1. Lost Wakeup Example](#20231-lost-wakeup-example)
-      - [20.2.3.2. Wrong Thread Getting the Lock Example](#20232-wrong-thread-getting-the-lock-example)
-    - [20.2.4. Add Lock \& Guard Variables to Fix Wait Queue Issues](#2024-add-lock--guard-variables-to-fix-wait-queue-issues)
+    - [20.2.1. DIY SPINLOCK via Adding `compare_and_swap()` To Our Naive Implementation](#2021-diy-spinlock-via-adding-compare_and_swap-to-our-naive-implementation)
+    - [20.2.2. ADDING A YIELD to our Spinlock](#2022-adding-a-yield-to-our-spinlock)
+    - [20.2.3. ADDING A WAIT QUEUE to our Spinlock](#2023-adding-a-wait-queue-to-our-spinlock)
+      - [20.2.3.1. Lost Wakeup EXAMPLE](#20231-lost-wakeup-example)
+      - [20.2.3.2. Wrong Thread Getting the Lock EXAMPLE](#20232-wrong-thread-getting-the-lock-example)
+    - [20.2.4. Add LOCK \& GUARD Variables to FIX WAIT QUEUE ISSUES](#2024-add-lock--guard-variables-to-fix-wait-queue-issues)
   - [20.3. Read-Write Locks](#203-read-write-locks)
     - [20.3.1. Why Read-Write Locks Can Exist](#2031-why-read-write-locks-can-exist)
     - [20.3.2. Read-Write Lock Details](#2032-read-write-lock-details)
     - [20.3.3. Using a Guard Variable to Keep Track of Readers](#2033-using-a-guard-variable-to-keep-track-of-readers)
+  - [20.4. SUMMARY](#204-summary)
 
 
 <!--------------------------------{.gray}------------------------------>
@@ -485,7 +496,17 @@ exit_group(0)                           = ?
 - **Microkernel** -- runs **minimum amount** of OS services in kernel mode (minimizes security risk)
 - **Hybrid** -- e.g. emulation service to user mode (Windows), device driver to user mode (macOS)
 
-## 2.6. PRACTICE
+## 2.6. SUMMARY
+Kernel Interfaces Operate Between CPU Mode Boundaries:
+- The kernel is the part of the OS that interacts with hardware (it runs in kernel mode)
+- System calls are the interface between user and kernel mode
+  - Every program must use this interface!
+- File format and instructions to define a simple ``Hello world'' (in 168 bytes)
+  - Difference between API and ABI
+  - How to explore system calls
+- Different kernel architectures shift how much code runs in kernel mode
+
+## 2.7. PRACTICE
 
 > ---
 
@@ -513,6 +534,9 @@ void _start(void) {
 ***A:*** C convention requires null-ended (`\0`) strings; ELF strings have no restrictions. {.lg}
 
 > ---
+
+
+
 
 
 
@@ -662,11 +686,18 @@ Most system calls have corresponding function calls in C, but may:
 ### 3.4.1. C `atexit` (vs. System call `exit()` / `exit_group()`)
 C `atexit(...)` calls the function in its given arguments `(...)` on program exit.
 
-## 3.5. PRACTICE:
+## 3.5. SUMMARY
+Operating Systems Provide the Foundation for Libraries, so you should know about:
+- Dynamic libraries and a comparison to static libraries
+  - How to manipulate the dynamic loader
+- Example of issues from ABI changes without API changes
+
+## 3.6. PRACTICE:
 
 ***Q:*** why should `printf()` be in a dynamic library? {.lr}
 
 > ***A:*** since it is used by multiple applications, it is more efficient to have one shared copy (dynamic library) instead of a separate library for each program (static library) {.lg}
+
 
 
 
@@ -779,7 +810,13 @@ Child pid: 2341
 Child parent pid: 2340
 ```
 
-## 4.5. PRACTICE
+## 4.5. SUMMARY
+The Operating System Creates Processes, and has to:
+- Maintain process control blocks, including state
+- Create new processes
+- Load a program, and re-initialize a process with context
+
+## 4.6. PRACTICE
 
 
 ***Q:*** does parent always print before child in the [code example above](#4412-fork-example)? {.lr}
@@ -804,6 +841,7 @@ Child parent pid: 2340
 ***Q:*** given the code in the `fork()` example, how could we modify it to create a fork bomb? {.lr}
 
 > ***A:*** calling `fork()` again in either the parent or child conditional code block will cause `fork()` to be called recursively infinitely. {.lg}
+
 
 
 
@@ -1027,7 +1065,12 @@ Child parent pid: 58061
 Child parent pid (after sleep): 1
 ```
 
-## 5.4. PRACTICE
+## 5.4. SUMMARY
+The operating system maintains a strict parent/child relationship; you should be able to identify (and prevent) the following:
+- Zombie processes
+- Orphan processes
+
+## 5.5. PRACTICE
 
 ***Q:*** how can zombie (child) processes be acknowledged? {.lr}
 
@@ -1038,7 +1081,6 @@ Child parent pid (after sleep): 1
 ***Q:*** if the parent of a parent process (i.e. grandparent process) terminates, do the child processes become orphans? {.lr}
 
 > ***A:*** no; parent-child process relationship is independent so the parent's parent or the child's child has no impact on whether the child to the parent becomes a zombie or orphan process. {.lg}
-
 
 
 
@@ -2126,6 +2168,16 @@ graph LR;
     - too high: equivalent to [FCFS](#fcfs-first-come-first-served--fifo)
     - too low: too many context switches (overhead)
 
+## 9.5. SUMMARY
+Scheduling Algorithms Involve Different Trade-Offs:
+- First Come First Served (FCFS) is the most basic scheduling algorithm
+- Shortest Job First (SJF) is a tweak that reduces waiting time
+- Shortest Remaining Time First (SRTF) uses SJF ideas with preemptions
+- SRTF optimizes lowest waiting time (or turnaround time)
+- Round-robin (RR) optimizes fairness and response time
+
+## 9.6. PRACTICE
+
 > ---
 
 ***Q: a)*** given the following process info, what is the process schedule **GIVEN A QUANTUM LENGTH OF $3$**{.r}? {.lr}
@@ -2369,6 +2421,14 @@ Tries to model ideal fairness.
 - A red-black tree is a self-balancing binary search tree
   - Keyed by virtual runtime
     - $O(lgN)$ for: insert, delete, update, find minimum
+
+## 10.6. SUMMARY
+Scheduling can get complex:
+- Introducing priority also introduces priority inversion
+- Some processes need good interactivity, others not so much
+- Multiprocessors may require per-CPU queues
+- Real-time requires predictability
+- Completely Fair Scheduler (CFS) tries to model the ideal fairness
 
 
 
@@ -3043,7 +3103,7 @@ Time between recalculations of priority using the dynamic priority algorithm.
 
 What is the scheduling? (each box is a timer interrupt) {.lr}
 
-![Alt text](image.png) {.lr}
+![Alt text](image-9.png) {.lr}
 
 - ***A:***  {.lg}
   1. Since each process has the same initial priority, we schedule the earliest arriving one first (X)
@@ -3056,7 +3116,7 @@ What is the scheduling? (each box is a timer interrupt) {.lr}
      - $\mathsf{P_B} = \frac{0}{2} + 0 = 0$}
     - new order of priorities (highest-->lowest): **B(0), X(1), Y(1), A(8)**
   5. since B has the highest priority, it will run for the full time interval from 10->20
-  - ![Alt text](image-1.png)
+  - ![Alt text](image-10.png)
 
 ---
 
@@ -3081,7 +3141,7 @@ What is the scheduling? (each box is a timer interrupt) {.lr}
      - $\mathsf{P_B} = \frac{6}{2} + 0 = 3$;
      - new order of priorities (highest-->lowest): **X(2), Y(2), B(3), A(9)**
   5. X,Y have lower priority but still blocked, so B runs until X, Y unblocked; then after X,Y re-execute, B resumes because it has higher priority than A
-  - ![Alt text](image-2.png)
+  - ![Alt text](image-11.png)
 
 ## 14.2. Memory Mapping (NOT TESTABLE)
 
@@ -3446,6 +3506,12 @@ int main(void) {
 - Servers need to bind to an address, listen, and accept connections
 - Clients need to connect to an address
 
+## 15.5. SUMMARY
+Sockets are IPC across physical machines that enable networking, the basics are:
+- Sockets require an address (e.g. local and IPv4/IPv6)
+- There are two types of sockets: stream and datagram
+- Servers need to bind to an address, listen, and accept connections
+- Clients need to connect to an address
 
 
 
@@ -3760,6 +3826,10 @@ Process 3: 1
 ***Q:*** how is this similar to `multiple-fork-example.c` (<<ADD LINK>>)? {.lr}
 > ***A:*** need to be able to pass a variable to a thread; only way we can do that is through a pointer {.lg}
 
+## 16.7. SUMMARY
+We explored how threads enable concurrency, and related them to something we already know (processes)
+- Threads are lighter weight, and share memory by default
+- Each process can have multiple threads (but just one at the start)
 
 
 
@@ -3940,6 +4010,14 @@ int main(void) {
     return 0;
 }
 ```
+
+## 17.7. SUMMARY
+Both Processes and (Kernel) Threads Enable Parallelization
+- Each process can have multiple (kernel) threads
+- Most implementations use one-to-one user-to-kernel thread mapping
+- The operating system has to manage what happens during a fork, or signals
+- We now have synchronization issues
+
 
 
 
@@ -4310,14 +4388,15 @@ Occur whenn two concurrent actions access the same variable **AND** at least one
 
 - Can be assumed to happen all at once
 - Cannot be pre-empted (i.e. has either happened or not; cannot execute "halfway")
-  - Between two atomic instructions, can be pre-empted
+  - You can be pre-empted between two atomic instructions
 
 ## 19.3. Three Address Code (TAC)
 
 - Intermediate code used for analysis and optimization by compilers.
 - TAC statements represent one fundamental operation (assume each is atomic)
   - makes it easier to reason about data races & read than assembly
-- Statements have the form: $\text{result} := \text{operand}_1 \text{operator} \text{operand}_2$
+- Statements have the form: $\text{result} := \text{operand}_1\ \text{operator}\ \text{operand}_2$
+- **TL;DR - breaks down code into atomic instructions**
 
 ### 19.3.1. GIMPLE (TAC used by `gcc`)
 
@@ -4342,9 +4421,10 @@ D.2 = D.1 + 1;
 *pcount = D.2;
 ```
 
-***Q:*** assuming two threads execute this once each & initially `*pcount = 0`, what are the possible values of `*pcount`? {.lr}
-- ***A:*** 1 (if context switch before last line) or 2 (if context switch after last line) {.lg}
+***Q:*** assuming two threads execute `(*pcount)++` once each & initially `*pcount = 0`, what are the possible values of `*pcount`? {.lr}
+- ***A:*** `*pcount` can either be **1** (if context switch before last line) or **2** (if context switch after last line) {.lg}
   - considering every possible case, let the read and write from thread 1 be R1 and W1 (R2 and W2 from thread 2); assume no re-ordering of instructions (i.e. always read then write in a thread)
+  - when both threads read before any write happens, a data race occurs (resulting in `*pcount` value being as if only one thread executed)
 
   |     |     |     | Order | `*pcount` |
   | --- | --- | --- | --- | --------- |
@@ -4396,7 +4476,7 @@ pthread_mutex_unlock(&m1);
 
 #### 19.4.2.1. How to Choose a Critical Section
 1. Safety (aka mutual exclusion)
-   - There should only be a single th
+   - There should only be a single thread in a critical section at once
 2. Liveness (aka progress)
    - If multiple threads reach a critical section, one must proceed
    - The critical section can’t depend on outside threads
@@ -4412,17 +4492,18 @@ pthread_mutex_unlock(&m1);
 ```c
 void* run(void* arg) {
     for (int i = 0; i < 100; ++i) {
-        pthread_mutex_lock(\&mutex); /* New */
+        pthread_mutex_lock(\&mutex); /*** NEW ***/
         ++counter;
-        pthread_mutex_unlock(\&mutex); /* New */
+        pthread_mutex_unlock(\&mutex); /*** NEW ***/
     }
 }
 
 int main(int argc, char *argv[])
 {
-    // Create 8 threads
-    // Join 8 threads
-    pthread_mutex_destroy(&mutex); /* New */
+    // ...create 8 threads...
+    // ...join 8 threads...
+
+    pthread_mutex_destroy(&mutex); /*** NEW ***/
     printf("counter = %i\n", counter);
 }
 ```
@@ -4438,8 +4519,6 @@ graph BT
 ## 19.5. DIY Locks Using a Single CPU/Thread
 
 Assuming a uniprocessor operating system, you could implement locks as follows:
-- would disable concurrency (assuming it ignores signals and interrupts)
-- not going to work on multiprocessors (and OS won’t let you change hardware)
 
 ```c
 void lock() {
@@ -4450,24 +4529,33 @@ void unlock() {
 }
 ```
 
+CONS:
+- would disable concurrency (assuming it ignores signals and interrupts)
+- not going to work on multiprocessors (and OS won’t let you change hardware)
+
 ### 19.5.1. DIY Locks in C
 ```c
 void init(int *l) {
-  *l = 0;
+  *l = 0; // initially UNLOCKED; i.e. no thread has the lock
 }
 void lock(int *l) {
-  while (*l == 1);
-  *l = 1;
+  while (*l == 1);  // inf loop waiting for some other thread to unlock
+
+  // *l == 0 at this point, since above loop ended;
+  // i.e. no other thread has the lock
+
+  *l = 1; // use current thread to LOCK
 }
 void unlock(int *l) {
-  *l = 0;
+  *l = 0; // UNLOCK the lock
 }
 ```
 
 ***Q:*** why is this not recommended? {.lr}
 - ***A:***  {.lg}
   - not safe  -- both threads can be in the critical section
-  - not efficient -- polling wastes CPU cycles
+  - not efficient -- polling wastes CPU cycles (busy wait)
+  - since locking is done manually, we can still end up with the case of R1->R2->W1->W2 causing a data race
 
 
 
@@ -4495,7 +4583,7 @@ void unlock(int *l) {
 <div style="page-break-after: always;"></div>
 
 # 20. Locks Implementation (2023-10-24)
-## 20.1. Minimal Hardware Requirements for Locks
+## 20.1. Minimal Hardware Requirements for Implementing Locks in Software
 Hardware requirements just have to ensure:
 1. Loads and stores are atomic
 2. Instructions execute in order
@@ -4505,7 +4593,7 @@ Main algorithms used for implementing locks in software (with minimal hardware) 
 - Lamport's bakery algorithm
 
 ## 20.2. Steps to Build a DIY Lock
-### 20.2.1. DIY Spinlock via Adding `compare_and_swap()` To Our Naive Implementation
+### 20.2.1. DIY SPINLOCK via Adding `compare_and_swap()` To Our Naive Implementation
 Consider an atomic `compare_and_swap(int *p, int old, int new)` that:
 - returns the original value pointed to
 - only swaps if the original value equals `old`, and changes it to `new`
@@ -4517,63 +4605,85 @@ void init(int *l) {
   *l = 0;
 }
 void lock(int *l) {
+  /*** NEW ***/
   // previously: `while (*l == 1);`
   while (compare_and_swap(l, 0, 1));
+  /*** NEW ***/
 }
 void unlock(int *l) {
   *l = 0;
 }
 ```
 
-***Q:*** what are the disadvantages of this system? {.lr}
-> ***A:*** still is inefficient due to polling {.lg}
+- PROS: {.lr}
+  - no data races (since this is an atomic instruction)
+- CONS: {.lg}
+  - still inefficient due to polling
 
 ***Q:*** what if you can't get the lock? {.lr}
 - ***A:*** {.lg}
-  - on uniprocessor machine: yield; let the kernel schedule another process, that may free the lock
+  - on uniprocessor machine: yield & let the kernel schedule another process (that may free the lock)
   - on multiprocesso machine: try again
 
-### 20.2.2. Adding a Yield
+### 20.2.2. ADDING A YIELD to our Spinlock
 ```c
-// ...
+void init(int *l) {
+  *l = 0;
+}
 void lock(int *l) {
+  // keep yielding to next thread until unlock
   while (compare_and_swap(l, 0, 1)) {
+    /*** NEW ***/
     thread_yield();
-  }
-}
-// ...
-```
-
-**ISSUES:**
-- Now we have a **thundering herd** problem
-  - multiple threads may be waiting on the same lock
-- We have no control over who gets the lock next
-  - We need to be able to reason about it (FIFO is okay)
-
-### 20.2.3. Adding a Wait Queue
-```c
-void lock(int *l) {
-  while (compare_and_swap(l, 0, 1)) {
-    // add myself to the lock wait queue
-    thread_sleep();
+    /*** NEW ***/
   }
 }
 void unlock(int *l) {
   *l = 0;
-  if (/* threads in wait queue */) {
-    // wake up one thread
-  }
 }
 ```
 
-**ISSUES:**
-1. lost wakeup
-2. wrong thread gets the lock
+- CONS: {.lr}
+  - **THUNDERING HERD** problem -- multiple threads may be waiting on the same lock
+  - We have no control over who gets the lock next
+    - We need to be able to reason about it (FIFO is okay)
 
-#### 20.2.3.1. Lost Wakeup Example
+### 20.2.3. ADDING A WAIT QUEUE to our Spinlock
+```c
+void init(int *l) {
+  *l = 0;
+}
+void lock(int *l) {
+  while (compare_and_swap(l, 0, 1)) {
+    /*** NEW ***/
+    // add myself to lock wait queue if I fail compare_and_swap
+    thread_sleep(); // sleep until someone else wakes me up (i.e. block until I get waked after a thread unlocks)
+    /*** NEW ***/
+  }
+}
+void unlock(int *l) {
+  *l = 0;
+  /*** NEW ***/
+  if (/* threads in wait queue */) {
+    // wake up each thread
+  }
+  /*** NEW ***/
+}
+```
+
+CONS {.lr}
+- [lost wakeup (i.e. thread never gets woken up after `thread_sleep()`)](#20231-lost-wakeup-example)
+- [wrong thread gets the lock](#20232-wrong-thread-getting-the-lock-example)
+
+#### 20.2.3.1. Lost Wakeup EXAMPLE
+TL;DR -- context-switch to `<<add to wait queue>>` + `thread_sleep()` after `unlock()` so the thread that failed `compare_and_swap()` won't get woken up (i.e. lost wakeup)
+
 Assume we have thread 1 (T1) and thread 2 (T2), thread 2 holds the lock
-- T1 runs line 2 and fails, swap to T2 that runs lines 10-12, T1 runs lines 3-4
-  - T1 will never get woken up!
+1. T1 runs & fails `while (compare_and_swap(l, 0, 1)) {`
+  - so T1 will run code to add itself to wait queue & sleep, BUT context-switch happens before it can sleep, so...
+2. context-switch to T2 that runs all `unlock()` code,
+3. context-switch back to T1 that adds itself to the wait queue & sleeps
+  - T1 will never get woken up bc T2 unlocked & finished waking all sleeping threads b4 T1 was added to queue!
 
 ```c
 void lock(int *l) {
@@ -4590,10 +4700,14 @@ void unlock(int *l) {
 }
 ```
 
-#### 20.2.3.2. Wrong Thread Getting the Lock Example
+#### 20.2.3.2. Wrong Thread Getting the Lock EXAMPLE
+TL;DR -- context-switch to `compare_and_swap()` after `unlock()` but before `thread_sleep()` can happen, so the thread that just unlocked the lock can get the lock again (i.e. wrong thread gets the lock)
+
 Assume we have T1, T2, and T3. T2 holds the lock, T3 is in queue.
-- T2 runs line 9, swap to T1 which runs line 2 and succeeds
+1. T2 runs line `*l = 0;`,
+2. context-switch to T1 which runs line `while (compare_and_swap(l, 0, 1)) {` and succeeds, so now T1 can run the critical section
   - T1 just stole the lock from T3!
+  - (recall that `compare_and_swap()` will change the value of `*l` if new/old values are different)
 ```c
 void lock(int *l) {
   while (compare_and_swap(l, 0, 1)) {
@@ -4609,23 +4723,36 @@ void unlock(int *l) {
 }
 ```
 
-### 20.2.4. Add Lock & Guard Variables to Fix Wait Queue Issues
+### 20.2.4. Add LOCK & GUARD Variables to FIX WAIT QUEUE ISSUES
+TL;DR -- DIY mutex
+- no other thread can interrupt after locking guard
+- see [live demo on youtube](https://www.youtube.com/live/LlHnkxgkmoU?si=iU2BX21E3C8WSzVL&t=1133)
+
 ```c
-typedef struct { int lock; int guard;
-                 queue_t *q; } mutex_t;
+typedef struct {  int lock;
+                  int guard; // internal spinlock
+                  queue_t *q;  } mutex_t;
 ```
 ```c
 void lock(mutex_t *m) {
   while (
     compare_and_swap(m->guard, 0, 1)
   );
+  // =
+  // lock(guard)
+
+  // if unlocked...
   if (m->lock == 0) {
-    m->lock = 1; // acquire mutex
-    m->guard = 0;
+    m->lock = 1; // acquire mutex (i.e. lock)
+    m->guard = 0; // = unlock(guard)
+
+  // if we cannot lock...
   } else {
-    enqueue(m->q, self);
-    m->guard = 0;
-    thread_sleep();
+    // means locked by another thread
+    enqueue(m->q, self); // add to wait queue
+    m->guard = 0; // = unlock(guard)
+    thread_sleep(); // sleep until someone else wakes me up (i.e. block until I get waked after a thread unlocks)
+
     // wakeup transfers the lock here
   }
 }
@@ -4635,6 +4762,9 @@ void unlock(mutex_t *m) {
   while (
     compare_and_swap(m->guard, 0, 1)
   );
+  // =
+  // lock(guard)
+
   if (queue_empty(m->q)) {
     // release lock, no one needs it
     m->lock = 0;
@@ -4644,18 +4774,19 @@ void unlock(mutex_t *m) {
     // to next thread
     thread_wakeup(dequeue(m->q));
   }
-  m->guard = 0;
+  m->guard = 0; // = unlock(guard)
 }
 ```
 
-ISSUES: **still** a data race
-- After a thread calls lock, it could get interrupted right before the `thread_sleep`
-- However, it’s been added to the wait queue, so `thread_wakeup` would try to wake up a thread that’s not sleeping yet (we know it’s about to)
-- We could simply retry the call to `thread_wakeup` until the thread finally calls `thread_sleep`
+- CONS: {.lr}
+  - **still** a data race
+    - After a thread calls lock, it could get interrupted right before the `thread_sleep`
+    - However, it’s been added to the wait queue, so `thread_wakeup` would try to wake up a thread that’s not sleeping yet (we know it’s about to)
+  - We could simply retry the call to `thread_wakeup` until the thread finally calls `thread_sleep`
 
 ## 20.3. Read-Write Locks
 ### 20.3.1. Why Read-Write Locks Can Exist
-RECALL: a data race is when two concurrent actions access the same variable & at least one of them is a **WRITE**
+RECALL: a data race is [when two concurrent actions access the same variable & at least one of them is a **WRITE**](#191-data-races)
 - means we could have any many readers as we want (don’t need a mutex as long as nothing writes at the same time)
 - need different lock modes for reading and writing
 
@@ -4665,6 +4796,8 @@ RECALL: a data race is when two concurrent actions access the same variable & at
 - Multiple threads can hold a read lock (`pthread_rwlock_rdlock`), but only one thread may hold a write lock (`pthread_rwlock_wrlock`) and will wait until the current readers are done
 
 ### 20.3.3. Using a Guard Variable to Keep Track of Readers
+See [live demo on youtube](https://www.youtube.com/live/LlHnkxgkmoU?si=XAKi8LSdwacQv3J6&t=1872)
+
 ```c
 typedef struct {
   int nreader;
@@ -4684,7 +4817,7 @@ void write_unlock(rwlock_t *l) {
 void read_lock(rwlock_t *l) {
   lock(&l->guard);
   ++nreader;
-  if (nreader == 1) { // first reader
+  if (nreader == 1) { // first reader locks
     lock(&l->lock);
   }
   unlock(&l->guard);
@@ -4693,9 +4826,16 @@ void read_lock(rwlock_t *l) {
 void read_unlock(rwlock_t *l) {
   lock(&l->guard);
   --nreader;
-  if (nreader == 0) { // last reader
+  if (nreader == 0) { // last reader unlocks
     unlock(&l->lock);
   }
   unlock(&l->guard);
 }
 ```
+
+## 20.4. SUMMARY
+We should know what data races are, and how to prevent them:
+- Mutex or spinlocks are the most straightforward locks
+- We need hardware support to implement locks
+- We need some kernel support for wake up notifications
+- If we know we have a lot of readers, we should use a read-write lock
