@@ -284,6 +284,23 @@
     - [20.3.2. Read-Write Lock Details](#2032-read-write-lock-details)
     - [20.3.3. Using a Guard Variable to Keep Track of Readers](#2033-using-a-guard-variable-to-keep-track-of-readers)
   - [20.4. SUMMARY](#204-summary)
+- [21. Semaphores (2023-10-26)](#21-semaphores-2023-10-26)
+  - [21.1. Why Semaphores Are Needed: Ordering](#211-why-semaphores-are-needed-ordering)
+    - [21.1.1. Example: Threads Have No Default Order](#2111-example-threads-have-no-default-order)
+    - [21.1.2. Example: Unsuccessful DIY Attempt to Maintain Order Using Mutexes](#2112-example-unsuccessful-diy-attempt-to-maintain-order-using-mutexes)
+      - [21.1.2.1. THREAD-SAFE Meaning](#21121-thread-safe-meaning)
+  - [21.2. Semaphore Details](#212-semaphore-details)
+    - [21.2.1. Example: Semaphore Values](#2121-example-semaphore-values)
+  - [21.3. Semaphore API](#213-semaphore-api)
+    - [21.3.1. Example: Adding Order to Threads](#2131-example-adding-order-to-threads)
+  - [21.4. Mutexes Are A Specific Type of Semaphore](#214-mutexes-are-a-specific-type-of-semaphore)
+  - [21.5. PRACTICE](#215-practice)
+    - [21.5.1. Problem 1: Ensure Producers Never Overwrite Filled Slots](#2151-problem-1-ensure-producers-never-overwrite-filled-slots)
+      - [21.5.1.1. Use a Semaphore to Track the Number of Empty Slots](#21511-use-a-semaphore-to-track-the-number-of-empty-slots)
+    - [21.5.2. Problem 2: Ensure Consumers Never Read From Empty Slots](#2152-problem-2-ensure-consumers-never-read-from-empty-slots)
+    - [21.5.3. Two Semaphores Ensure Proper Order for Producers and Consumers](#2153-two-semaphores-ensure-proper-order-for-producers-and-consumers)
+    - [21.5.4. FULL SOLUTION](#2154-full-solution)
+  - [21.6. SUMMARY](#216-summary)
 
 
 <!--------------------------------{.gray}------------------------------>
@@ -2946,12 +2963,12 @@ Want each page table to fit into a single page
 - $\text{\# of levels} = \lceil \frac{\text{(VIRTUAL bits) - (OFFSET bits)}}{\text{INDEX bits}} \rceil$
 
 ***Q: a)*** given a 32-bit virtual address, 4096-byte page size, & 4-byte PTE, how many entries can we fit onto our (page-sized) page table? {.lr}
-> ***A:*** $\frac{2^{12}}{2^2} = 2^10  = 1024$ entries {.lg}
+> ***A:*** $\frac{2^{12}}{2^2} = 2^{10}  = 1024$ entries {.lg}
   - $\frac{\text{\# of PTEs}}{page} = \frac{\text{\# of pages}}{\text{\# of PTEs}}$
 
 ***Q: b)*** how many levels of page tables do we need given the previous requirements? {.lr}
 - ***A:*** $\text{\# of levels} = \lceil \frac{\text{(VIRTUAL bits) - (OFFSET bits)}}{\text{INDEX bits}} \rceil = \lceil \frac{32 - 12}{10} \rceil = \lceil \frac{20}{10} \rceil = \lceil 2 \rceil = 2$ levels of page tables {.lg}
-  - makes sense since the size of each level (= # of entries in each page table) is 10 bits ($2^{10}$ entries), so: L1 (10 bits), L0 (10 bits), offset (12 bits) ==> **32 bits (given size of virtual address!)**{.g}
+  - makes sense since the size of each level (= \# of entries in each page table) is 10 bits ($2^{10}$ entries), so: L1 (10 bits), L0 (10 bits), offset (12 bits) ==> **32 bits (given size of virtual address!)**{.g}
 
 
 ## 13.4. Speeding Up Page Table Implementation via Caching
@@ -4839,3 +4856,497 @@ We should know what data races are, and how to prevent them:
 - We need hardware support to implement locks
 - We need some kernel support for wake up notifications
 - If we know we have a lot of readers, we should use a read-write lock
+
+
+
+
+
+
+
+
+<!--------------------------------{.gray}------------------------------>
+
+
+
+
+
+
+
+<hr style="border:30px solid #FFFF; margin: 100px 0 100px 0; {.gray}"> </hr>
+
+
+
+
+
+
+<!--------------------------------{.gray}------------------------------>
+<div style="page-break-after: always;"></div>
+
+# 21. Semaphores (2023-10-26)
+## 21.1. Why Semaphores Are Needed: Ordering
+Locks:
+- **DO**{.lg} enable single threading (mutual exclusion) between `lock` & `unlock` calls
+- **DO NOT**{.lr} guarantee ordering of threads
+
+### 21.1.1. Example: Threads Have No Default Order
+Threads can execute in any order, so the print output below is non-deterministic.
+```c
+// ordered-print.c
+
+void* print_first(__attribute__((unused)) void* arg) {
+    printf("This is first\n");
+    return NULL;
+}
+
+void* print_second(__attribute__((unused)) void* arg) {
+    printf("I'm going second\n");
+    return NULL;
+}
+
+int main(__attribute__((unused)) int argc,
+         __attribute__((unused)) char *argv[]) {
+    pthread_t thread[2];
+
+    pthread_create(&thread[0], NULL, &print_first, NULL);
+    pthread_create(&thread[1], NULL, &print_second, NULL);
+
+    pthread_join(thread[0], NULL);
+    pthread_join(thread[1], NULL);
+    return 0;
+}
+```
+Both outputs are possible:
+```
+This is first
+I'm going second
+```
+```
+I'm going second
+This is first
+```
+
+***Q:*** how can we modify the code above to make print statements always in order? {.lr}
+- ***A:*** join each thread executing a print before creating another thread (in effect making the code sequential instead of concurrent) {.lg}
+-
+  ```c
+  // ordered-print-join.c
+
+  // ...
+
+  int main(__attribute__((unused)) int argc,
+           __attribute__((unused)) char *argv[]) {
+      pthread_t thread[2];
+
+      pthread_create(&thread[0], NULL, &print_first, NULL);
+      pthread_join(thread[0], NULL); // join before creating next thread
+
+      pthread_create(&thread[1], NULL, &print_second, NULL);
+      pthread_join(thread[1], NULL);
+      return 0;
+  }
+  ```
+
+### 21.1.2. Example: Unsuccessful DIY Attempt to Maintain Order Using Mutexes
+Things that don't work:
+- unlocking in a thread but locking in another thread is undefined behaviour
+- deadlock if first thread runs to completion before second thread
+  - second thread will never run because it is waiting for the first thread to unlock (but first thread already ran unlock code, so it won't run again)
+
+```c
+
+```c
+// ordered-print-mutex.c
+
+/*** NEW ***/
+static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+/*** NEW ***/
+
+void* print_first(__attribute__((unused)) void* arg) {
+    printf("This is first\n");
+    /*** NEW ***/
+    pthread_mutex_unlock(&mutex);
+    /*** NEW ***/
+    return NULL;
+}
+
+void* print_second(__attribute__((unused)) void* arg) {
+    /*** NEW ***/
+    pthread_mutex_lock(&mutex);
+    // first lock prevents progression beyond second lock
+    // until unlock in first thread
+    pthread_mutex_lock(&mutex);
+    printf("I'm going second\n");
+    pthread_mutex_unlock(&mutex); // need to unlock for other threads
+    /*** NEW ***/
+    return NULL;
+}
+
+int main(__attribute__((unused)) int argc,
+         __attribute__((unused)) char *argv[]) {
+    pthread_t thread[2];
+
+    pthread_create(&thread[0], NULL, &print_first, NULL);
+    pthread_create(&thread[1], NULL, &print_second, NULL);
+
+    pthread_join(thread[0], NULL);
+    pthread_join(thread[1], NULL);
+    return 0;
+}
+```
+
+- ***Q:*** given the code below, how can we add mutexes to ensure that the words in each sentence are printed in the correct order? {.lr}
+  - ↓
+    ```c
+    // safe-print.c
+
+    void* print_first(__attribute__((unused)) void* arg) {
+        write(1, "This ", 5);
+        write(1, "is ", 3);
+        write(1, "first\n", 6);
+        return NULL;
+    }
+
+    void* print_second(__attribute__((unused)) void* arg) {
+        write(1, "I'm ", 4);
+        write(1, "going ", 6);
+        write(1, "second\n", 7);
+        return NULL;
+    }
+
+    int main(__attribute__((unused)) int argc,
+             __attribute__((unused)) char *argv[]) {
+        pthread_t thread[2];
+        pthread_create(&thread[0], NULL, &print_first, NULL);
+        pthread_create(&thread[1], NULL, &print_second, NULL);
+        pthread_join(thread[0], NULL);
+        pthread_join(thread[1], NULL);
+        return 0;
+    }
+    ```
+  - e.g. (non-deterministic) output:
+    ```
+    This I'm going second
+    is first
+    ```
+    ```
+    This is I'm first
+    going second
+    ```
+
+- ***A:***  {.lg}
+  ```c
+  // safe-print-fixed.c
+
+  #include <pthread.h>
+  #include <unistd.h>
+
+  static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+
+  void* print_first(__attribute__((unused)) void* arg) {
+      /*** NEW ***/
+      pthread_mutex_lock(&mutex);
+      /*** NEW ***/
+
+      write(1, "This ", 5);
+      write(1, "is ", 3);
+      write(1, "first\n", 6);
+
+      /*** NEW ***/
+      pthread_mutex_unlock(&mutex);
+      /*** NEW ***/
+      return NULL;
+  }
+
+  void* print_second(__attribute__((unused)) void* arg) {
+      /*** NEW ***/
+      pthread_mutex_lock(&mutex);
+      /*** NEW ***/
+
+      write(1, "I'm ", 4);
+      write(1, "going ", 6);
+      write(1, "second\n", 7);
+
+      /*** NEW ***/
+      pthread_mutex_unlock(&mutex);
+      /*** NEW ***/
+      return NULL;
+  }
+
+  int main(__attribute__((unused)) int argc,
+           __attribute__((unused)) char *argv[]) {
+      pthread_t thread[2];
+      pthread_create(&thread[0], NULL, &print_first, NULL);
+      pthread_create(&thread[1], NULL, &print_second, NULL);
+      pthread_join(thread[0], NULL);
+      pthread_join(thread[1], NULL);
+      return 0;
+  }
+  ```
+  - e.g. (correct, deterministic) output (recall that threads are unordered):
+    ```
+    This is first
+    I'm going second
+    ```
+    ```
+    I'm going second
+    This is first
+    ```
+
+#### 21.1.2.1. THREAD-SAFE Meaning
+
+**THREAD-SAFE:** code that can be run by multiple threads at the same time without causing problems (value of each call is deterministic)
+
+## 21.2. Semaphore Details
+
+In general, semaphores are used for signaling between processes
+
+- Semaphores have a value that's shared between all threads (& optionally all processes)
+  - Think of value as an unsigned integer that is always 0 or greater
+  - can be initialized to any value
+    - let $x$ be its initial value; then $x$ `wait` calls may occur w/o any `post` calls
+    - basically means $x$ threads/processes can run in parallel
+- 2 fundamental operations:
+  - `wait` -- DECRements the shared value atomically
+    - **will not return until shared value is greater than 0!**
+    - makes it so that we can never have a negative value
+  - `post` -- INCRements the shared value atomically
+
+### 21.2.1. Example: Semaphore Values
+```mermaid
+graph LR
+	1A(("START")) --> 2["1"]
+	2 --> |"`wait`"| 3["0"]
+   3 --> |"`wait`"| 4["X -- still 0, switch process"]
+   4 --> |"`post`"| 5["1"]
+```
+
+## 21.3. Semaphore API
+
+Is similar to [`pthread` Locks](#19-locks-2023-10-20)
+
+```c
+#include <semaphore.h>
+
+int sem_init(sem_t *sem, int pshared, unsigned int value)
+int sem_destroy(sem_t *sem);
+
+int sem_wait(sem_t *sem);
+int sem_trywait(sem_t *sem); // non-blocking wait
+
+int sem_post(sem_t *sem);
+```
+
+- all functions return 0 on success
+- argument `int pshared` is a boolean
+  - Set to 1 to share semaphore between processes (i.e. for IPC, `fork`s)
+  - If set to 0, `fork`s will have a unshared, independent copies
+
+### 21.3.1. Example: Adding Order to Threads
+
+See [ordered-print.c](#example-threads-have-no-default-order) for how threads can be unordered; see ordering threads using semaphores for how to fix it below:
+
+```c
+// ordered-print-fixed.c
+
+static sem_t sem; // global var
+
+void* print_first(__attribute__((unused)) void* arg) {
+    printf("This is first\n");
+    /*** NEW ***/
+    sem_post(&sem); // increment sem
+    /*** NEW ***/
+    return NULL;
+}
+
+void* print_second(__attribute__((unused)) void* arg) {
+    /*** NEW ***/
+   // will block thread until `sem_post` increments `sem` to 1
+   // so that `sem_wait` is able to subtract and get a non-negative result!
+    sem_wait(&sem);
+    /*** NEW ***/
+    printf("I'm going second\n");
+    return NULL;
+}
+
+int main(__attribute__((unused)) int argc,
+         __attribute__((unused)) char *argv[]) {
+    /*** NEW ***/
+    sem_init(&sem, 0, 0); // `pshared` set to 0 since only 1 process
+    /*** NEW ***/
+
+    pthread_t thread[2];
+    pthread_create(&thread[0], NULL, &print_first, NULL);
+    pthread_create(&thread[1], NULL, &print_second, NULL);
+    pthread_join(thread[0], NULL);
+    pthread_join(thread[1], NULL);
+    return 0;
+}
+```
+
+- ***Q:*** will the code above work if we set the initial value of `sem` to 1? {.lr}
+  ```c
+  sem_init(&sem, 0, 1); // originally `sem_init(..., ..., 0);`
+  ```
+- ***A:*** no; `sem_wait` will return immediately because `sem` is already 1, so `print_second()` can run before `print_first()` runs {.lg}
+
+***Q:*** how can we make the code above work EVEN if we set the initial value of `sem` to 1? {.lr}
+
+> ***A:*** add 2 `sem_wait`s instead of 1 {.lg}
+
+## 21.4. Mutexes Are A Specific Type of Semaphore
+
+- Mutexes are a special case of semaphores
+  - `sem_init(&sem, 0, 1);` is equivalent to `pthread_mutex_init(&mutex, NULL);`
+  - `sem_wait(&sem);` is equivalent to `pthread_mutex_lock(&mutex);`
+  - `sem_post(&sem);` is equivalent to `pthread_mutex_unlock(&mutex);`
+
+```c
+// using a semaphore as a mutex with INITIAL VALUE 1
+
+static sem_t sem; /* New */
+static int counter = 0;
+
+void* run(void* arg) {
+    for (int i = 0; i < 100; ++i) {
+        sem_wait(&sem); /* New */
+        ++counter;
+        sem_post(&sem); /* New */
+    }
+}
+
+int main(int argc, char *argv[]) {
+  sem_init(&sem, 0, 1); /* New */
+  /* Initialize, create, and join multiple threads */
+  printf("counter = %i\n", counter);
+}
+```
+
+## 21.5. PRACTICE
+
+See [live demo on youtube](https://www.youtube.com/live/Hb3Oafx5y9I?si=xNMQd5sAxODbikCX&t=1879) of the problem explanation and solution.
+
+- ***Q:*** Can We Come Up with a Solution for a Producer/Consumer Problem? {.lr}
+  - Assume you have a circular buffer (each slot is either empty or filled):
+  -
+    | [ 0 ] | [ 1 ] | [ ]      | [ ... ] | [ ]      | [ ... ] | [ n - 1 ] |
+    | ----- | ----- | -------- | ------- | -------- | ------- | --------- |
+    |       |       | ↑        |         | ↑        |         |           |
+    |       |       | producer |         | consumer |         |           |
+  - The producer should write to the buffer (if the buffer is not full)
+  - The consumer should read from the buffer (if the buffer is not empty)
+    - In both cases the index is initially 0 and increasess equentially
+
+
+### 21.5.1. Problem 1: Ensure Producers Never Overwrite Filled Slots
+```c
+static uint32_t buffer_size;
+
+void init_semaphores() {
+  sem_init(&empty_slots, 0, /* ? */);
+}
+
+void producer() {
+  while (/* ... */) {
+    /* spend time producing data */
+    fill_slot();
+  }
+}
+
+void consumer() {
+  while (/* ... */) {
+    empty_slot();
+    /* spend time consuming data */
+  }
+}
+```
+
+#### 21.5.1.1. Use a Semaphore to Track the Number of Empty Slots
+
+```c
+// use a semaphore to track the number of empty slots
+
+void init_semaphores() {
+  sem_init(&empty_slots, 0, buffer_size);
+}
+
+void producer() {
+  while (/* ... */) {
+    /* spend time producing data */
+    sem_wait(&empty_slots); /* New */
+    fill_slot();
+  }
+}
+
+void consumer() {
+  while (/* ... */) {
+    empty_slot();
+    sem_post(&empty_slots); /* New */
+    /* spend time consuming data */
+  }
+}
+```
+
+### 21.5.2. Problem 2: Ensure Consumers Never Read From Empty Slots
+```c
+void init_semaphores() {
+  sem_init(&empty_slots, 0, buffer_size);
+  sem_init(&filled_slots, 0, /* ? */);
+}
+
+void producer() {
+  while (/* ... */) {
+    /* spend time producing data */
+    sem_wait(&empty_slots);
+    fill_slot();
+  }
+}
+
+void consumer() {
+   while (/* ... */) {
+    empty_slot();
+    sem_post(&empty_slots);
+    /* spend time consuming data */
+  }
+}
+```
+
+### 21.5.3. Two Semaphores Ensure Proper Order for Producers and Consumers
+
+```c
+void init_semaphores() {
+  sem_init( & empty_slots, 0, buffer_size);
+  sem_init( & filled_slots, 0, 0);
+}
+
+void producer() {
+  while ( /* ... */ ) {
+    /* spend time producing data */
+    sem_wait( & empty_slots);
+    fill_slot();
+    sem_post( & filled_slots); /* New */
+  }
+}
+
+void consumer() {
+  while ( /* ... */ ) {
+    sem_wait( & filled_slots); /* New */
+    empty_slot();
+    sem_post( & empty_slots);
+    /* spend time consuming data */
+  }
+}
+```
+
+***Q:*** what happens if we initialize both semaphore values to 0? {.lr}
+> ***A:*** it will do the same thing it does now {.lg}
+
+### 21.5.4. FULL SOLUTION
+
+See [`producer-consumer-fixed.c`](https://laforge.eecg.utoronto.ca/ece344/2023-fall/student/materials/-/blob/main/lectures/21-semaphores/producer-consumer-fixed.c?ref_type=heads) on GitLab
+
+## 21.6. SUMMARY
+Previously we used locks to ensure mutual exclusion, now we can use semaphores to ensure order:
+- Semaphores contain an initial value you choose
+- You can increment the value using post
+- You can decrement the value using wait (it blocks if the current value is 0)
+- You still need to be prevent data races
