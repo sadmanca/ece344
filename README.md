@@ -292,6 +292,11 @@
   - [21.2. Semaphore Details](#212-semaphore-details)
     - [21.2.1. Example: Semaphore Values](#2121-example-semaphore-values)
   - [21.3. Semaphore API](#213-semaphore-api)
+    - [`sem_init()`](#sem_init)
+    - [`sem_destroy()`](#sem_destroy)
+    - [`sem_wait()`](#sem_wait)
+      - [`sem_trywait()`](#sem_trywait)
+    - [`sem_post()`](#sem_post)
     - [21.3.1. Example: Adding Order to Threads](#2131-example-adding-order-to-threads)
   - [21.4. Mutexes Are A Specific Type of Semaphore](#214-mutexes-are-a-specific-type-of-semaphore)
   - [21.5. PRACTICE](#215-practice)
@@ -300,6 +305,7 @@
     - [21.5.2. Problem 2: Ensure Consumers Never Read From Empty Slots](#2152-problem-2-ensure-consumers-never-read-from-empty-slots)
     - [21.5.3. Two Semaphores Ensure Proper Order for Producers and Consumers](#2153-two-semaphores-ensure-proper-order-for-producers-and-consumers)
     - [21.5.4. FULL SOLUTION](#2154-full-solution)
+    - [SAMPLE OUTPUTS](#sample-outputs)
   - [21.6. SUMMARY](#216-summary)
 
 
@@ -5141,9 +5147,34 @@ int sem_post(sem_t *sem);
   - Set to 1 to share semaphore between processes (i.e. for IPC, `fork`s)
   - If set to 0, `fork`s will have a unshared, independent copies
 
+### `sem_init()`
+```int sem_init(sem_t *sem, int pshared, unsigned int value)```
+
+Initializes the semaphore pointed to by `sem`. The `pshared` argument determines whether the semaphore is shared between processes (`pshared != 0`) or threads within a process (`pshared == 0`). The `value` argument specifies the initial value of the semaphore.
+
+### `sem_destroy()`
+```int sem_destroy(sem_t *sem)```
+
+Destroys the semaphore pointed to by `sem`. After this call, the semaphore is no longer usable until it is reinitialized by `sem_init`.
+
+### `sem_wait()`
+```int sem_wait(sem_t *sem)```
+
+Decrements (locks) the semaphore pointed to by `sem`. If the semaphore's value is greater than zero, then the decrement proceeds, and the function returns immediately. If the semaphore currently has the value zero, then the call blocks until it becomes possible to perform the decrement.
+
+#### `sem_trywait()`
+```int sem_trywait(sem_t *sem)```
+
+Similar to `sem_wait`, but it's non-blocking. If the decrement can't be immediately performed, the function returns an error instead of blocking.
+
+### `sem_post()`
+```int sem_post(sem_t *sem)```
+
+Increments (unlocks) the semaphore pointed to by `sem`. If the semaphore's value consequently becomes greater than zero, then another process or thread blocked in a `sem_wait` call will be woken up and proceed to lock the semaphore.
+
 ### 21.3.1. Example: Adding Order to Threads
 
-See [ordered-print.c](#example-threads-have-no-default-order) for how threads can be unordered; see ordering threads using semaphores for how to fix it below:
+See [ordered-print.c](#example-threads-have-no-default-order) for how threads can be unordered; see ordering threads using semaphores below for how to fix it:
 
 ```c
 // ordered-print-fixed.c
@@ -5227,14 +5258,21 @@ See [live demo on youtube](https://www.youtube.com/live/Hb3Oafx5y9I?si=xNMQd5sAx
 
 - ***Q:*** Can We Come Up with a Solution for a Producer/Consumer Problem? {.lr}
   - Assume you have a circular buffer (each slot is either empty or filled):
+    - circular = loops back to beginning at end (i.e. index n points to index 0)
   -
     | [ 0 ] | [ 1 ] | [ ]      | [ ... ] | [ ]      | [ ... ] | [ n - 1 ] |
     | ----- | ----- | -------- | ------- | -------- | ------- | --------- |
     |       |       | ↑        |         | ↑        |         |           |
     |       |       | producer |         | consumer |         |           |
-  - The producer should write to the buffer (if the buffer is not full)
-  - The consumer should read from the buffer (if the buffer is not empty)
-    - In both cases the index is initially 0 and increasess equentially
+  - will have 2 pools of threads:
+    - producers: produce (i.e. write) data & write to buffer (if the buffer is not full)
+      - should not overwrite filled slots
+    - consumers: consume (i.e. read) data & read from buffer (if the buffer is not empty)
+      - should not read from empty slots
+  - all producers share an index & all consumers share an index
+    - In both cases the index is initially 0 and increases sequentially
+    - i.e. for this simplified case, consider no data races
+  - after producers fill up all indices, they should wait until a consumer frees one before they can write again (i.e. no overwriting filled slots)
 
 
 ### 21.5.1. Problem 1: Ensure Producers Never Overwrite Filled Slots
@@ -5296,7 +5334,7 @@ void init_semaphores() {
 void producer() {
   while (/* ... */) {
     /* spend time producing data */
-    sem_wait(&empty_slots);
+    sem_wait(&empty_slots); // decrement num of empty slots
     fill_slot();
   }
 }
@@ -5304,7 +5342,7 @@ void producer() {
 void consumer() {
    while (/* ... */) {
     empty_slot();
-    sem_post(&empty_slots);
+    sem_post(&empty_slots); // increment num of empty slots
     /* spend time consuming data */
   }
 }
@@ -5314,35 +5352,260 @@ void consumer() {
 
 ```c
 void init_semaphores() {
-  sem_init( & empty_slots, 0, buffer_size);
-  sem_init( & filled_slots, 0, 0);
+  sem_init(&empty_slots, 0, buffer_size); // init num of empty slots to num elements
+  sem_init(&filled_slots, 0, 0);          // init num of filled slots to 0
 }
 
 void producer() {
   while ( /* ... */ ) {
     /* spend time producing data */
-    sem_wait( & empty_slots);
+    sem_wait(&empty_slots);
     fill_slot();
-    sem_post( & filled_slots); /* New */
+    sem_post(&filled_slots); /* New */
   }
 }
 
 void consumer() {
   while ( /* ... */ ) {
-    sem_wait( & filled_slots); /* New */
+    sem_wait(&filled_slots); /* New */
     empty_slot();
-    sem_post( & empty_slots);
+    sem_post(&empty_slots);
     /* spend time consuming data */
   }
 }
 ```
 
 ***Q:*** what happens if we initialize both semaphore values to 0? {.lr}
-> ***A:*** it will do the same thing it does now {.lg}
+- ***A:*** deadlock {.lg}
+  - both threads will wait forever because they are both waiting for the other to post
+    - producer `sem_wait(&empty_slots);` cannot be passed since num empty slots is 0
+      - **need this to be nonzero!**
+    - consumer `sem_wait(&filled_slots);` cannot be passed since num filled slots is 0
 
 ### 21.5.4. FULL SOLUTION
 
-See [`producer-consumer-fixed.c`](https://laforge.eecg.utoronto.ca/ece344/2023-fall/student/materials/-/blob/main/lectures/21-semaphores/producer-consumer-fixed.c?ref_type=heads) on GitLab
+```c
+#include <errno.h>
+#include <pthread.h>
+#include <semaphore.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+
+void empty_slot();
+void fill_slot();
+
+static sem_t producer_remaining_sem;
+static sem_t consumer_remaining_sem;
+
+static uint32_t producer_ms = 100;
+static uint32_t consumer_ms = 120;
+
+static uint32_t buffer_size = 10; // num of elements
+
+static sem_t empty_slots;  // CURR num of empty slots
+static sem_t filled_slots; // CURR num of filled slots
+
+void initialize_semaphores() {
+    sem_init(&empty_slots, 0, buffer_size); // init num of empty slots to num elements
+    sem_init(&filled_slots, 0, 0);          // init num of filled slots to 0
+}
+
+void* producer(__attribute__((unused)) void* arg) {
+    while (sem_trywait(&producer_remaining_sem) == 0) {
+        usleep(producer_ms * 1000); /* simulate doing some work */
+        sem_wait(&empty_slots); // wait for at least 1 slot to be empty
+        fill_slot();
+        sem_post(&filled_slots);
+    }
+    return NULL;
+}
+
+void* consumer(__attribute__((unused)) void* arg) {
+    while (sem_trywait(&consumer_remaining_sem) == 0) {
+        sem_wait(&filled_slots); // wait for at least 1 slot to be filled
+        empty_slot();
+        sem_post(&empty_slots);
+        usleep(consumer_ms * 1000); /* simulate doing some work */
+    }
+    return NULL;
+}
+
+// ---------------------------------------------------------------------
+
+enum slot {
+    SLOT_EMPTY,
+    SLOT_FILLED,
+};
+
+static enum slot* buffer;
+static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+static uint32_t producer_index = 0;
+static uint32_t consumer_index = 0;
+
+void fill_slot() {
+    pthread_mutex_lock(&mutex);
+    printf("Filling slot %u\n", producer_index);
+    if (buffer[producer_index] == SLOT_FILLED) {
+        printf("  \033[31mSlot is already filled!\033[0m\n");
+    }
+    buffer[producer_index] = SLOT_FILLED;
+    ++producer_index;
+    if (producer_index == buffer_size) {
+        producer_index = 0;
+    }
+    pthread_mutex_unlock(&mutex);
+}
+
+void empty_slot() {
+    pthread_mutex_lock(&mutex);
+    printf("Emptying slot %u\n", consumer_index);
+    if (buffer[consumer_index] == SLOT_EMPTY) {
+        printf("  \033[31mSlot is already empty!\033[0m\n");
+    }
+    buffer[consumer_index] = SLOT_EMPTY;
+    ++consumer_index;
+    if (consumer_index == buffer_size) {
+        consumer_index = 0;
+    }
+    pthread_mutex_unlock(&mutex);
+}
+
+int main(int argc, char *argv[]) {
+    uint32_t num_to_produce = 15;
+
+    if (argc < 3 || argc >= 8) {
+        fprintf(stderr,
+                "%s <num_producers> <num_consumers> <num_to_produce=%u> <buffer_size=%u> <producer_ms=%u> <consumer_ms=%u>\n",
+                argv[0], num_to_produce, buffer_size, producer_ms, consumer_ms);
+        return EINVAL;
+    }
+
+    /* Initialize the producer threads */
+    uint32_t num_producers = atoi(argv[1]);
+    if (num_producers <= 0) {
+        fprintf(stderr, "Number of producers needs to be greater than 0\n");
+        return EINVAL;
+    }
+    pthread_t* producer_threads = malloc(num_producers * sizeof(pthread_t));
+
+    /* Initialize the consumer threads */
+    uint32_t num_consumers = atoi(argv[2]);
+    if (num_consumers <= 0) {
+        fprintf(stderr, "Number of consumers needs to be greater than 0\n");
+        return EINVAL;
+    }
+    pthread_t* consumer_threads = malloc(num_consumers * sizeof(pthread_t));
+
+    /* Initialize semaphores used to bound the number of calls to fill and empty slots */
+    if (argc >= 4) {
+        num_to_produce = atoi(argv[3]);
+        if (num_to_produce <= 0) {
+            fprintf(stderr, "Number to produce needs to be greater than 0\n");
+            return EINVAL;
+        }
+    }
+    sem_init(&producer_remaining_sem, 0, num_to_produce);
+    sem_init(&consumer_remaining_sem, 0, num_to_produce);
+
+    /* Initialize the buffer */
+    if (argc >= 5) {
+        buffer_size = atoi(argv[4]);
+        if (buffer_size <= 0) {
+            fprintf(stderr, "Buffer size needs to be greater than 0\n");
+            return EINVAL;
+        }
+    }
+    buffer = malloc(buffer_size * sizeof(enum slot));
+    for (uint32_t i = 0; i < buffer_size; ++i) {
+        buffer[0] = SLOT_EMPTY;
+    }
+
+    /* Set the producer time (in milliseconds) */
+    if (argc >= 6) {
+        producer_ms = atoi(argv[5]);
+        if (producer_ms <= 0 || producer_ms > 1000) {
+            fprintf(stderr, "Producer time (in milliseconds) needs to be between 1 and 1000\n");
+            return EINVAL;
+        }
+    }
+
+    /* Set the consumer time (in milliseconds) */
+    if (argc >= 7) {
+        consumer_ms = atoi(argv[6]);
+        if (consumer_ms <= 0 || consumer_ms > 1000) {
+            fprintf(stderr, "Consumer time (in milliseconds) needs to be between 1 and 1000\n");
+            return EINVAL;
+        }
+    }
+
+    /* Initialize semaphores used to ensure we don't overrun the buffer */
+    initialize_semaphores();
+
+    /* Create the producer threads */
+    for (uint32_t i = 0; i < num_producers; ++i) {
+        pthread_create(&producer_threads[i], NULL, &producer, NULL);
+    }
+
+    /* Create the consumer threads */
+    for (uint32_t i = 0; i < num_consumers; ++i) {
+        pthread_create(&consumer_threads[i], NULL, &consumer, NULL);
+    }
+
+    /* Join the producer threads */
+    for (uint32_t i = 0; i < num_producers; ++i) {
+        pthread_join(producer_threads[i], NULL);
+    }
+
+    /* Join the consumer threads */
+    for (uint32_t i = 0; i < num_consumers; ++i) {
+        pthread_join(consumer_threads[i], NULL);
+    }
+
+    /* Clean up all our resources */
+    sem_destroy(&filled_slots);
+    sem_destroy(&empty_slots);
+    sem_destroy(&producer_remaining_sem);
+    sem_destroy(&consumer_remaining_sem);
+    free(consumer_threads);
+    free(producer_threads);
+    free(buffer);
+
+    return 0;
+}
+```
+
+### SAMPLE OUTPUTS
+Without semaphores (i.e. reading from empty slots & writing to filled slots):
+```
+Emptying slot 0
+  Slot is already empty!
+Emptying slot 1
+  Slot is already empty!
+...
+Emptying slot 9
+  Slot is already empty!
+Filling slot 0
+Filling slot 1
+...
+Filling slot 9
+Emptying slot 0
+Emptying slot 1
+...
+```
+
+With semaphores (i.e. no reading from empty slots & no writing to filled slots!):
+```
+Filled slot 0
+Filled slot 1
+Emptying slot 0
+Emptying slot 1
+Filling slot 2
+...
+```
+
 
 ## 21.6. SUMMARY
 Previously we used locks to ensure mutual exclusion, now we can use semaphores to ensure order:
@@ -5350,3 +5613,28 @@ Previously we used locks to ensure mutual exclusion, now we can use semaphores t
 - You can increment the value using post
 - You can decrement the value using wait (it blocks if the current value is 0)
 - You still need to be prevent data races
+
+
+
+
+
+
+
+
+<!--------------------------------{.gray}------------------------------>
+
+
+
+
+
+
+
+<hr style="border:30px solid #FFFF; margin: 100px 0 100px 0; {.gray}"> </hr>
+
+
+
+
+
+
+<!--------------------------------{.gray}------------------------------>
+<div style="page-break-after: always;"></div>
