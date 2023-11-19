@@ -335,6 +335,22 @@
       - [23.3.1.3. Solving The Data Race](#23313-solving-the-data-race)
   - [23.4. Tools to Make Thread Debugging Easier](#234-tools-to-make-thread-debugging-easier)
     - [23.4.1. `meson` Thread Sanitizer](#2341-meson-thread-sanitizer)
+- [24. Midterm Review (2023-11-02)](#24-midterm-review-2023-11-02)
+- [25. Disks (2023-11-03)](#25-disks-2023-11-03)
+  - [25.1. Solid State Drives (SSDs)](#251-solid-state-drives-ssds)
+    - [25.1.1. SSD R/W Speeds](#2511-ssd-rw-speeds)
+    - [25.1.2. SSD Pages \& Blocks](#2512-ssd-pages--blocks)
+    - [25.1.3. How OS Speeds Up SSD Block R/W](#2513-how-os-speeds-up-ssd-block-rw)
+  - [25.2. RAID levels (vs. SLED)](#252-raid-levels-vs-sled)
+    - [25.2.1. Single Large Expensive Disk (SLED)](#2521-single-large-expensive-disk-sled)
+    - [25.2.2. RAID 0 (Striping)](#2522-raid-0-striping)
+    - [25.2.3. RAID 1 (Mirroring)](#2523-raid-1-mirroring)
+    - [25.2.4. RAID 4 (Dedicated Parity Disk)](#2524-raid-4-dedicated-parity-disk)
+    - [25.2.5. RAID 5 (Distributed Parity Block Per Stripe)](#2525-raid-5-distributed-parity-block-per-stripe)
+    - [25.2.6. RAID 6 (Double Distributed Parity Block Per Stripe)](#2526-raid-6-double-distributed-parity-block-per-stripe)
+  - [25.3. SUMMARY](#253-summary)
+  - [25.4. PRACTICE](#254-practice)
+- [26. More Midterm Review (2023-11-14)](#26-more-midterm-review-2023-11-14)
 
 
 <!--------------------------------{.gray}------------------------------>
@@ -6404,3 +6420,307 @@ Can also be used for debugging invalid memory access errors:
 ```bash
 $ meson setup -Db_sanitize=address ...
 ```
+
+
+
+
+
+
+
+
+<!--------------------------------{.gray}------------------------------>
+
+
+
+
+
+
+
+<hr style="border:30px solid #FFFF; margin: 100px 0 100px 0; {.gray}"> </hr>
+
+
+
+
+
+
+<!--------------------------------{.gray}------------------------------>
+<div style="page-break-after: always;"></div>
+
+# 24. Midterm Review (2023-11-02)
+
+- [YouTube (Section 1)](https://youtube.com/live/7-DhwIIMC9k)
+- [YouTube (Section 3)](https://youtube.com/live/G-7kHUAuj6A)
+
+
+
+
+
+
+
+
+
+<!--------------------------------{.gray}------------------------------>
+
+
+
+
+
+
+
+<hr style="border:30px solid #FFFF; margin: 100px 0 100px 0; {.gray}"> </hr>
+
+
+
+
+
+
+<!--------------------------------{.gray}------------------------------>
+<div style="page-break-after: always;"></div>
+
+# 25. Disks (2023-11-03)
+
+## 25.1. Solid State Drives (SSDs)
+
+- Use transistors (like RAM) to store data rather than magnetic disks (HDDs)
+- Contains groups of pages grouped into blocks on a plane (that is itself on a die)
+- PROS: {.lg}
+  - No moving parts or physical limitations
+  - Higher throughput, and good random access
+  - More energy efficient
+  - Better space density
+- CONS: {.lr}
+  - More expensive
+  - Lower endurance (number of writes)
+  - More complicated to write drivers for
+
+![A SSD Contains Pages](images/lec23/2023-11-19_12-03-55.png)
+
+### 25.1.1. SSD R/W Speeds
+
+Pages are typically 4 KiB
+- Reading a page: 10 μs
+- Writing a page: 100 μs
+- Erasing a block: 1 ms
+
+### 25.1.2. SSD Pages & Blocks
+
+- You can only read complete pages and write to freshly erased pages
+- Erasing is done per block (a block has 128 or 256 pages)
+  - An entire block needs to be erased before writing
+- Writing is slow (may need to create a new block)
+
+### 25.1.3. How OS Speeds Up SSD Block R/W
+
+- SSDs need to garbage collect blocks
+  - Move any pages that are still alive to a new block (may be overhead)
+- The disk controller doesn't know what blocks are still alive
+  - SSD may think the disk is full, when a file could be deleted (not erased)
+- The OS can use the `TRIM` command to inform the SSD a block is unused
+  - The SSD can then freely erase the block without moving overhead
+
+## 25.2. RAID levels (vs. SLED)
+
+### 25.2.1. Single Large Expensive Disk (SLED)
+- So far we’ve been talking about single device (aka Single Large Expensive Disk = SLED)
+  - Just one large disk for data
+    - even if multiple disks are present in a computer, if data is local to each disk (i.e. undistributed), then it is still considered a SLED
+  - Single point of failure
+- Distributing data on multiple disks is called Redundant Array of Independent Disks (RAID)
+  - Use redundancy to prevent data loss and increase throughput
+  - Tradeoff between data redundancy and speed (and cost) varies between RAID levels
+    - i.e. tradeoff of how many drives you can tolerate failing before data loss and how much extra performance you get and how much extra space you can use
+  - Numerical value of level does **not** correspond to degree of tradeoff between redundancy and speed (but **does** correspond to complexity of how data is distributed across disks)
+  - summary of RAID levels:
+    - [RAID 0: striping (no redundancy)](#raid-0-striping)
+    - [RAID 1: mirroring (full redundancy)](#raid-1-mirroring)
+    - [RAID 4: dedicated parity disk](#raid-4-dedicated-parity-disk)
+    - [RAID 5: distributed parity block per stripe](#raid-5-distributed-parity-block-per-stripe)
+    - [RAID 6: double distributed parity block per stripe](#raid-6-double-distributed-parity-block-per-stripe)
+
+### 25.2.2. RAID 0 (Striping)
+
+Data stripes (128KB and 256KB) are distributed over disks:
+![RAID 0](images/lec23/raid-0.svg)
+
+- RAID 0 is for performance only (i.e. no redundancy)
+  - extreme opposite of [RAID 1](#raid-1-mirroring)
+- Data is stripped across all disks in the array (you can have more than 2)
+- PROS: {.lg}
+  - Faster parallel access, roughly N times speed (where N is the number of disks)
+- CONS: {.lr}
+  - Any disk failure results in a data loss (more points of failure)
+
+### 25.2.3. RAID 1 (Mirroring)
+
+Every disk in the array has a mirrored copy of all the data:
+  - extreme opposite of [RAID 0](#raid-1-mirroring)
+![RAID 1](images/lec23/raid-1.svg)
+
+- PROS: {.lg}
+  - Good reliability, as long as one disk remains, no data loss
+  - Good read performance
+- CONS: {.lr}
+  - High cost for redundancy (we can do better)
+    - wastes a lot of space (limited by the lowest capacity disk)
+  - Write performance is the same as a single disk
+    - since we can write in parallel to both disks at the same time
+
+### 25.2.4. RAID 4 (Dedicated Parity Disk)
+
+Data stripes distributed over disks with a dedicated parity disk (p = parity):
+- Parity stores `xor` of copies 1-3, any one copy can be reconstructed
+- ![RAID 4](images/lec23/raid-4.svg)
+
+- PROS: {.lg}
+  - We get $N − 1$ times performance (disregarding parity disk)
+  - Good redundancy (only one disk failure allowed) --- can reconstruct any one disk
+- CONS: {.lr}
+  - Enables use of $1 - \frac{1}{N}$ of the available space as a result of parity disk
+    - Requires at least 3 drives
+  - Write performance is limited by parity disk (only one write at a time)
+    - Parity disk also wears out faster (since any write to any disk will require a write to the parity disk)
+
+### 25.2.5. RAID 5 (Distributed Parity Block Per Stripe)
+
+Data stripes distributed over disks and each disk takes turns with parity blocks:
+- Single parity block for each group of data blocks (where the disk containing the parity block changes for each group)
+![RAID 5](images/lec23/raid-5.svg)
+
+- PROS: {.lg}
+  - Same as [RAID 4](#raid-4-dedicated-parity-disk)...
+  - ...ALONG WITH improved write performance (no longer a bottleneck on a single parity drive)
+  - Each disk gets to be the parity disk for some stripe
+    - So instead of wearing out the parity disk, we wear out all the disks equally
+
+### 25.2.6. RAID 6 (Double Distributed Parity Block Per Stripe)
+
+RAID 6 extends RAID 5 by adding another parity block per stripe; thus, it uses block-level striping with two parity blocks distributed across all member disks.
+![RAID 6](images/lec23/raid-6.svg)
+
+- PROS: {.lg}
+  - Same as [RAID 5](#raid-5-distributed-parity)...
+  - ...ALONG WITH improved redundancy (can reconstruct any two disks)
+- CONS: {.lr}
+  - Due to the extra parity, we can only use $1 - \frac{2}{N}$ of the available space
+    - Requires at least 4 drives
+  - Write performance is limited by parity disks (only two writes at a time)
+    - i.e. write performance is slightly less than RAID 5, due to another parity calculation
+    - Parity calculation is much more complex (using differential equations, no longer simple `xor`)
+
+## 25.3. SUMMARY
+- We explored two topics: SSDs and RAID
+  - SSDs are more like RAM except accessed in pages and blocks
+  - SSDs also need to work with the OS for best performance (TRIM)
+  - Use RAID to tolerate failures and improve performance using multiple disks
+
+## 25.4. PRACTICE
+
+***Q:*** what is data striping? {.lr}
+- ***A:*** grouping data (i.e. along the same "row") across disks (128KB and 256KB) {.lg}
+  - is necessary for parity blocks to work (since they need to be able to access the same data in the stripe to calculate the parity and enable redundancy)
+  - files are broken up into data of that size and then distributed over multiple disks (e.g. 2 disks --> half on each disk)
+
+---
+
+***Q:*** how does RAID 0 improve performance? {.lr}
+- ***A:***  {.lg}
+  - using the example of (e.g. 2 disks --> half on each disk), if you have 2 disks, then you can read/write to both disks at the same time (i.e. in parallel) to get a speedup of 2x
+  - disadvantage is that if any disk fails, then all the data is lost because you cannot rebuild the data from the other disk (since it only has half of the data)
+
+---
+
+***Q:*** what are the issues with HDDs? {.lr}
+- ***A:***  {.lg}
+  - poor random access
+    - requires scheduling what blocks to read/write
+  - moving parts introduces fragility
+  - proximity to magnetization could corrupt data
+
+---
+
+***Q:*** why do we have a distinction between blocks and pages? {.lr}
+> ***A:*** can erase a block (is rather slow), but CANNOT erase a page {.lg}
+
+---
+
+***Q:*** how does updating (but not moving) a file on a page correspond to read/write-ing blocks and pages? {.lr}
+- ***A:***  {.lg}
+  - instead of writing to the same page, we write to a new page (since we cannot erase a page)
+    - possibly in a new block that it has to erase and move that page over to that block and essentially just copy most of the data minus your modification
+    - original page is still there, but is now marked as "garbage" (unused) and will be erased later
+      - over time that whole block might be full of unused pages that we just moved somewhere else, so the kernel has to do a lot of keeping track of where the pages actually are
+      - SSDs themselves too can also garbage collect blocks
+        - e.g. if only one page is being used in a block and everything else in it can't be written to, then the SSD can just move that page to a new block and then go ahead and erase that block so it can be reused again
+        - would need to copy any active pages to that new block (since is just copying data isn't doing anything useful, this would be considered overhead)
+      - OS has to comunicate with SSD to figure out what can be erased safely without needing to move it (ergo the [`TRIM` command](#how-os-speeds-up-ssd-block-rw))
+        - this is bc the SSD doesn't know what blocks are still alive (i.e. have data that is still being used by the OS)
+          - e.g. the SSD may think the disk is full, when a file could be deleted (not erased)
+
+---
+
+***Q:*** what about RAID 2 and RAID 3? {.lr}
+> ***A:*** they are bad ideas; no one uses them XD {.lg}
+
+---
+
+***Q:*** what does parity block mean? {.lr}
+> ***A:*** parity just means some extra information it can use to recompute the data if a disk dies {.lg}
+
+---
+
+***Q:*** how does parity use `xor` to recompute data? {.lr}
+- ***A:***  {.lg}
+  - if you have 3 disks, then you can use `xor` to compute the data on the 3rd disk if you have the data on the other 2 disks
+    - e.g. if you have `a` and `b`, then `a xor b` will give you `c` (where `c` is the parity block)
+    - if you have `a` and `c`, then `a xor c` will give you `b`
+    - if you have `b` and `c`, then `b xor c` will give you `a`
+  - e.g. consider if you have bits 1, 0, and 1 on 3 disks; given the `xor` result of all bits, you can deduce what the missing bit is
+    - `xor` is 0 if all bits are the same, and 1 if they are different
+    - if you have 1, 0, and 1, then the `xor` result is 1
+    - if we only have bits 1 and 1, then the missing bit must be 0 (since `1 xor 1 xor 1 = 1` is incorrect but `1 xor 1 xor 0 = 0` is correct)
+
+---
+
+***Q:*** is there any risk to losing data if we lose the parity disk/block? {.lr}
+> ***A:*** no, because we can just recompute the parity disk/block using the other (actual) data {.lg}
+
+---
+
+***Q:*** what is RAID 1+0? {.lr}
+- ***A:*** it is RAID 1 (mirroring) on top of RAID 0 (striping) {.lg}
+  - e.g. if you have 4 disks, then you can have 2 pairs of disks that are mirrored (i.e. RAID 1) and then stripe the data across the 2 pairs (i.e. RAID 0)
+  - this is a good idea because it gives you the redundancy of RAID 1 and the speed of RAID 0
+  - you can lose any 1 disk in each pair and still be fine (since you have the other disk in the pair to reconstruct the data)
+  - but if you lose both disks in a pair, then you lose all the data (since you cannot reconstruct the data from the other pair)
+
+
+
+
+
+
+
+
+
+<!--------------------------------{.gray}------------------------------>
+
+
+
+
+
+
+
+<hr style="border:30px solid #FFFF; margin: 100px 0 100px 0; {.gray}"> </hr>
+
+
+
+
+
+
+<!--------------------------------{.gray}------------------------------>
+<div style="page-break-after: always;"></div>
+
+# 26. More Midterm Review (2023-11-14)
+
+- [YouTube (Section 1)](https://youtube.com/live/ySedCf0Gc3s)
+- [YouTube (Section 2)](https://youtube.com/live/tJNWbF3kSOM)
+- [YouTube (Section 3)](https://youtube.com/live/mONnaMN_4NI)
