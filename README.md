@@ -325,6 +325,16 @@
         - [22.3.3.3.1. Preventing Deadlocks by Ensuring Order](#223331-preventing-deadlocks-by-ensuring-order)
         - [22.3.3.3.2. Preventing Deadlocks by Using `trylock`](#223332-preventing-deadlocks-by-using-trylock)
   - [22.4. SUMMARY](#224-summary)
+- [23. Parallelization Example (2023-10-31)](#23-parallelization-example-2023-10-31)
+  - [23.1. Overview](#231-overview)
+  - [23.2. Serial (Inefficient) Code](#232-serial-inefficient-code)
+  - [23.3. Parallelized Code (With Data Races)](#233-parallelized-code-with-data-races)
+    - [23.3.1. ERRORS](#2331-errors)
+      - [23.3.1.1. Thread-safe Code](#23311-thread-safe-code)
+      - [23.3.1.2. Speeding Up Library Functions From Reading Documentation](#23312-speeding-up-library-functions-from-reading-documentation)
+      - [23.3.1.3. Solving The Data Race](#23313-solving-the-data-race)
+  - [23.4. Tools to Make Thread Debugging Easier](#234-tools-to-make-thread-debugging-easier)
+    - [23.4.1. `meson` Thread Sanitizer](#2341-meson-thread-sanitizer)
 
 
 <!--------------------------------{.gray}------------------------------>
@@ -5960,3 +5970,437 @@ We have another tool to ensure order:
 - Condition variables are clearer for complex condition signaling
 - Locking granularity matters
 - You must prevent deadlocks
+
+
+
+
+
+
+
+
+<!--------------------------------{.gray}------------------------------>
+
+
+
+
+
+
+
+<hr style="border:30px solid #FFFF; margin: 100px 0 100px 0; {.gray}"> </hr>
+
+
+
+
+
+
+<!--------------------------------{.gray}------------------------------>
+<div style="page-break-after: always;"></div>
+
+# 23. Parallelization Example (2023-10-31)
+
+## 23.1. Overview
+
+This is a simple example of parallelization using pthreads.
+- The program simulates a bank with a number of accounts.
+- Each account has a unique ID and balance of $1,000.
+- The program then performs a number of transfers between random accounts (each transfer is for 10% of the balance of the account).
+  - `securely_connect_to_bank()` must be called before starting a transfer
+- The program then prints the total balance of all accounts.
+- Goal: be faster than 11 seconds
+
+## 23.2. Serial (Inefficient) Code
+
+```c
+#include <assert.h>
+#include <errno.h>
+#include <limits.h>
+#include <locale.h>
+#include <pthread.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
+
+#define STARTING_BALANCE 1000
+#define NUM_TRANSFERS 10000000
+#define NUM_THREADS 8
+
+struct account {
+  uint32_t id;
+  uint64_t balance;
+};
+
+static uint32_t num_accounts = 0;
+static struct account* accounts = NULL; // holds all accounts
+
+// simulates time spent connecting to bank
+static void securely_connect_to_bank() {
+    const int64_t nsec_per_sec = 1000000000;
+
+    /* Calculate the target time to wait until base on the current time */
+    struct timespec target;
+    clock_gettime(CLOCK_MONOTONIC, &target);
+    target.tv_nsec += 1000;
+    if (target.tv_nsec >= nsec_per_sec) {
+        target.tv_nsec -= nsec_per_sec;
+        target.tv_sec += 1;
+    }
+
+    /* Busy loop that keeps on reading the time */
+    struct timespec current;
+    while (1) {
+        clock_gettime(CLOCK_MONOTONIC, &current);
+        if (current.tv_sec > target.tv_sec) {
+            break;
+        }
+        else if (current.tv_nsec >= target.tv_nsec) {
+            break;
+        }
+    }
+}
+
+static void transfer(struct account* from, struct account* to) {
+    securely_connect_to_bank();
+    uint64_t amount = from->balance / 10;
+    from->balance -= amount;
+    to->balance += amount;
+}
+
+static void* run(void* arg) {
+    uint32_t thread_id = *((uint32_t *) arg);
+    free(arg);
+
+    return NULL;
+}
+
+void check_error(int ret, const char* message) {
+    if (ret == 0) {
+        return;
+    }
+    errno = ret;
+    perror(message);
+    exit(ret);
+}
+
+int main(int argc, char* argv[]) {
+    if (argc != 2) {
+        return EINVAL;
+    }
+
+    setlocale(LC_NUMERIC, "");
+
+    /* Get the number of accounts to simulate */
+    errno = 0;
+    num_accounts = strtoul(argv[1], NULL, 10);
+    assert(num_accounts != 0);
+    assert(errno == 0);
+
+    size_t accounts_size = num_accounts * sizeof(struct account);
+    accounts = malloc(accounts_size);
+    assert(accounts != NULL);
+
+    printf("Memory Used: %lu MiB\n", accounts_size / (1024 * 1024));
+
+    for (uint64_t i = 0; i < num_accounts; ++i) {
+        accounts[i].id = i + 1;
+        accounts[i].balance = STARTING_BALANCE;
+    }
+    printf("Bank initial funds: $%'lu\n", (uint64_t) STARTING_BALANCE * num_accounts);
+
+    /* INEFFICIENT SERIAL CODE SIMULATING TRANSFERS */
+    /* WANT TO PARALLELIZE THIS CODE */
+    /* ----------------------------- */
+    for (uint64_t i = 0; i < NUM_TRANSFERS; ++i) {
+        uint64_t from_index = rand() % num_accounts;
+        uint64_t to_index = rand() % num_accounts;
+        transfer(&accounts[from_index], &accounts[to_index]);
+    }
+    /* ----------------------------- */
+
+    uint64_t total_balance = 0;
+    for (uint64_t i = 0; i < num_accounts; ++i) {
+        total_balance += accounts[i].balance;
+    }
+
+    printf("Bank final funds:   $%'lu\n", total_balance);
+
+    free(accounts);
+
+    return 0;
+}
+```
+
+## 23.3. Parallelized Code (With Data Races)
+
+```c
+// ...
+
+static void* run(void* arg) {
+  uint32_t thread_id = *((uint32_t *) arg);
+  free(arg);
+
+  /* New */
+  // for (uint64_t i = 0; i < NUM_TRANSFERS; ++i) {
+  for (uint64_t i = 0; i < NUM_TRANSFERS / NUM_THREADS; ++i) {
+  /* need to divide workload by num_threads; otherwise no spped again */
+    uint64_t from_index = rand() % num_accounts;
+    uint64_t to_index = rand() % num_accounts;
+    transfer(&accounts[from_index], &accounts[to_index]);
+  }
+  /* New */
+
+  return NULL;
+}
+
+// ...
+
+  pthread_t threads[NUM_THREADS];
+  for (uint32_t i = 0; i < NUM_THREADS; ++ i) {
+    int* thread_id = malloc(sizeof(uint32_t));
+    assert(thread_id != NULL);
+    *thread_id = i;
+    check_error(pthread_create(&threads[i], NULL, run, thread_id), "pthread_create");
+  }
+
+  for (uint32_t i = 0; i < NUM_THREADS; ++ i) {
+    check_error(pthread_join(threads[i], NULL), "pthread_join");
+  }
+
+  // previously serial code was here
+
+  uint64_t total_balance = 0;
+  for (uint64_t i = 0; i < num_accounts; ++i) {
+    total_balance += accounts[i].balance;
+  }
+
+  printf("Bank final funds:   $%'lu\n", total_balance);
+
+  free(accounts);
+
+  return 0;
+```
+### 23.3.1. ERRORS
+
+- if we run the code above with 10k accounts each time, the start and final account totals are the same in 15/15 trials
+- BUT if we run the code above with 4 accounts, the start and final account totals are wildly different for each of just 3 trials
+
+***Q:*** why? {.lr}
+> ***A:*** with 8 threads, a data race can only happen  {.lg}
+
+***Q:*** what issues can happen with the code above? {.lr}
+> ***A:*** buffer underflow when transferring money from an account resulting in obscenely large balances {.lg}
+
+#### 23.3.1.1. Thread-safe Code
+
+From reading the `rand()` library function documentation, we know that it is (multi)thread-safe, so we can use it in parallel code and deduce that data races are happening elsewhere.
+
+#### 23.3.1.2. Speeding Up Library Functions From Reading Documentation
+
+Since we know that `rand()`  is thread-safe, we can hypothesize that it likely uses a mutex in the background for each thread; as a result, we can experiment by initializing `rand()` with a specific seed for each thread to avoid the overhead of mutexes (and successfully observe an increase in execution speed).
+
+```c
+static void* run(void* arg) {
+  uint32_t thread_id = *((uint32_t *) arg);
+  free(arg);
+
+  /* New */ uint32_t seed = thread_id + 1; /* New */
+  for (uint64_t i = 0; i < NUM_TRANSFERS / NUM_THREADS; ++i) {
+    uint64_t from_index = /* New */ rand_r(&seed) /* New */ % num_accounts;
+    uint64_t to_index   = /* New */ rand_r(&seed) /* New */ % num_accounts;
+    transfer(&accounts[from_index], &accounts[to_index]);
+  }
+
+  return NULL;
+}
+```
+
+#### 23.3.1.3. Solving The Data Race
+
+The `for` loop is independent, and the `seed`, `from_index`, and `to_index` variables are local variables (i.e. thread specific), so the data race must be occurring in the `transfer()` function.
+
+Upon further viewing, we see that the `transfer()` function is not thread-safe because it is accessing the `balance` field of the `from` and `to` accounts without any synchronization and because the code uses non-atomic instructions.
+
+```c
+static void transfer(struct account* from, struct account* to) {
+  securely_connect_to_bank();
+  uint64_t amount = from->balance / 10;
+  from->balance -= amount;
+  to->balance += amount;
+}
+```
+
+***Q:*** how can we use mutexes to prevent data races? {.lr}
+> ***A:*** start by trying to use one global mutex for the entire bank {.lg}
+
+```c
+// ...
+
+static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+
+// ...
+
+static void transfer(struct account* from, struct account* to) {
+  /* New */ pthread_mutex_lock(&mutex); /* New */
+  securely_connect_to_bank();
+  uint64_t amount = from->balance / 10;
+  from->balance -= amount;
+  to->balance += amount;
+  /* New */ pthread_mutex_unlock(&mutex); /* New */
+}
+```
+
+***Q:*** how can we speed up this code more (it is not as efficient as possible)? {.lr}
+- ***A:*** {.lg}
+  - lock after `securely_connect_to_bank();`, since the bank connection is not shared and is not a critical section
+  ```c
+  static void transfer(struct account* from, struct account* to) {
+    securely_connect_to_bank(); // SWITCHED!
+    pthread_mutex_lock(&mutex); // SWITCHED!
+    uint64_t amount = from->balance / 10;
+    from->balance -= amount;
+    to->balance += amount;
+    pthread_mutex_unlock(&mutex);
+  }
+  ```
+  - use a mutex per account instead of a global mutex
+    - works because each thread will be transferring money between different pairs (e.g. thread 1 transfers between accounts 1 and 2, thread 2 transfers between accounts 3 and 4, etc.)
+
+```c
+// ...
+
+struct account {
+  uint32_t id;
+  uint64_t balance;
+  /* New */ pthread_mutex_t mutex; /* New */
+};
+
+// ...
+
+  for (uint64_t i = 0; i < num_accounts; ++i) {
+    accounts[i].id = i + 1;
+    accounts[i].balance = STARTING_BALANCE;
+    /* NEW */ pthread_mutex_init(&accounts[i].mutex, NULL); /* NEW */
+  }
+
+// ...
+
+static void transfer(struct account* from, struct account* to) {
+  securely_connect_to_bank();
+  /* NEW */
+  pthread_mutex_lock(&from->mutex);
+  pthread_mutex_lock(&to->mutex);
+  /* NEW */
+  uint64_t amount = from->balance / 10;
+  from->balance -= amount;
+  to->balance += amount;
+  /* NEW */
+  pthread_mutex_lock(&to->mutex);
+  pthread_mutex_lock(&from->mutex);
+  /* NEW */
+}
+```
+
+***Q:*** the code hangs, and running `htop` shows very low CPU use, indicating a deadlock; where does this occur and why? {.lr}
+- ***A:***  {.lg}
+  - consider the case where thread 1 transfers from account 1 to account 2 and thread 2 transfers from account 2 to account 1 (i.e. `transfer(&accounts[0], &accounts[1])` and `transfer(&accounts[1], &accounts[0]`)
+  - if thread 1 locks account 1 (`pthread_mutex_lock(&from->mutex)`, where `from` is account 1) and thread 2 locks account 2 (`pthread_mutex_lock(&from->mutex)`, where `from` is account 2), then both threads will be waiting for the other thread to unlock the account it needs to lock in the `pthread_mutex_lock(&to->mutex)` call
+  - this is the exact scenario we described for deadlocks previously!
+
+
+***Q:*** how can we solve this issue? {.lr}
+- ***A:***  {.lg}
+  - one way could be to lock the accounts in order of their IDs (i.e. lock the account with the lower ID first):
+
+```c
+static void transfer(struct account* from, struct account* to) {
+  securely_connect_to_bank();
+  /* NEW */
+  pthread_mutex_t* m1;
+  pthread_mutex_t* m2;
+  if (from->id < to->id) {
+    m1 = &from->mutex;
+    m2 = &to->mutex;
+  } else {
+    m1 = &to->mutex;
+    m2 = &from->mutex;
+  }
+  /* NEW */
+  pthread_mutex_lock(/* NEW */ m1 /* NEW */);
+  pthread_mutex_lock(/* NEW */ m2 /* NEW */);
+  uint64_t amount = from->balance / 10;
+  from->balance -= amount;
+  to->balance += amount;
+  pthread_mutex_lock(/* NEW */ m1 /* NEW */);
+  pthread_mutex_lock(/* NEW */ m2 /* NEW */);
+}
+```
+
+  - we could also use `trylock()` and consequently not have to worry about order (better for code maintainability):
+
+```c
+static void transfer(struct account* from, struct account* to) {
+  securely_connect_to_bank();
+  pthread_mutex_lock(&from->mutex);
+  /* NEW */
+  while (p_thread_mutex_trylock(&to->mutex) != 0) {
+    pthread_mutex_unlock(&from->mutex);
+    sched_yield(); // we hold no locks, so yield to next thread
+    pthread_mutex_lock(&from->mutex);
+  }
+  // now we should have both locks
+  /* NEW */
+  pthread_mutex_lock(&to->mutex);
+  uint64_t amount = from->balance / 10;
+  from->balance -= amount;
+  to->balance += amount;
+  pthread_mutex_lock(&to->mutex);
+  pthread_mutex_lock(&from->mutex);
+}
+```
+
+***Q:*** this code still deadlocks; where and why does this occur? {.lr}
+- ***A:***  {.lg}
+  - consider the case of transfering to the same account (i.e. `transfer(&accounts[0], &accounts[0])`)
+  - after `pthread_mutex_lock(&from->mutex);` in a thread, the same thread is waiting for the account that was just locked to be unlocked via `while (p_thread_mutex_trylock(&to->mutex) != 0)`
+  - this is a deadlock because the thread is waiting for itself to unlock the account it is waiting to lock (except this time with 100% CPU usage as this code is tried over and over again)
+  - can fix by checking if `from` and `to` are the same account and skipping the `while` loop if they are (i.e. non-thread-based solution)
+
+```c
+static void transfer(struct account* from, struct account* to) {
+  if (from == to) {
+    return;
+  }
+
+  // ...
+
+}
+```
+
+- the code finally works as expected!
+- however, while we see a speedup when there are a large amount of accounts, the code actually runs slower when there are only a handful number of accounts (e.g. 8)
+
+***Q:*** why is this? {.lr}
+- ***A:*** because the fewer accounts we have, the higher the liklihood that any account is being used by a thread and so another thread won't be able to acquire the lock for that account {.lg}
+  - similarly, the more accounts we have, the lower the liklihood that any account is being used by a thread and so another thread will be able to acquire the lock for that account
+
+
+## 23.4. Tools to Make Thread Debugging Easier
+### 23.4.1. `meson` Thread Sanitizer
+
+- can catch circular wait deadlocks
+- does not catch all possible race conditions
+
+```bash
+$ meson setup -Db_sanitize=thread ...
+```
+
+To turn off thread sanitization:
+
+```bash
+$ meson setup -Db_sanitize=None ...
+```
+
+Can also be used for debugging invalid memory access errors:
+```bash
+$ meson setup -Db_sanitize=address ...
+```
