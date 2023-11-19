@@ -292,12 +292,12 @@
   - [21.2. Semaphore Details](#212-semaphore-details)
     - [21.2.1. Example: Semaphore Values](#2121-example-semaphore-values)
   - [21.3. Semaphore API](#213-semaphore-api)
-    - [`sem_init()`](#sem_init)
-    - [`sem_destroy()`](#sem_destroy)
-    - [`sem_wait()`](#sem_wait)
-      - [`sem_trywait()`](#sem_trywait)
-    - [`sem_post()`](#sem_post)
-    - [21.3.1. Example: Adding Order to Threads](#2131-example-adding-order-to-threads)
+    - [21.3.1. `sem_init()`](#2131-sem_init)
+    - [21.3.2. `sem_destroy()`](#2132-sem_destroy)
+    - [21.3.3. `sem_wait()`](#2133-sem_wait)
+      - [21.3.3.1. `sem_trywait()`](#21331-sem_trywait)
+    - [21.3.4. `sem_post()`](#2134-sem_post)
+    - [21.3.5. Example: Adding Order to Threads](#2135-example-adding-order-to-threads)
   - [21.4. Mutexes Are A Specific Type of Semaphore](#214-mutexes-are-a-specific-type-of-semaphore)
   - [21.5. PRACTICE](#215-practice)
     - [21.5.1. Problem 1: Ensure Producers Never Overwrite Filled Slots](#2151-problem-1-ensure-producers-never-overwrite-filled-slots)
@@ -305,8 +305,26 @@
     - [21.5.2. Problem 2: Ensure Consumers Never Read From Empty Slots](#2152-problem-2-ensure-consumers-never-read-from-empty-slots)
     - [21.5.3. Two Semaphores Ensure Proper Order for Producers and Consumers](#2153-two-semaphores-ensure-proper-order-for-producers-and-consumers)
     - [21.5.4. FULL SOLUTION](#2154-full-solution)
-    - [SAMPLE OUTPUTS](#sample-outputs)
+    - [21.5.5. SAMPLE OUTPUTS](#2155-sample-outputs)
   - [21.6. SUMMARY](#216-summary)
+- [22. Locking (2023-10-27)](#22-locking-2023-10-27)
+  - [22.1. Momitors](#221-momitors)
+    - [22.1.1. Monitor Example: Java’s `synchronized` Keyword](#2211-monitor-example-javas-synchronized-keyword)
+  - [22.2. Condition Variables (via `pthread`)](#222-condition-variables-via-pthread)
+    - [22.2.1. Condition Variables MUST Be Paired With a Mutex](#2221-condition-variables-must-be-paired-with-a-mutex)
+    - [22.2.2. `pthread_cond_wait()` Does NOT Contain Data Races](#2222-pthread_cond_wait-does-not-contain-data-races)
+      - [22.2.2.1. Example: Using Condition Variables for Producer/Consumer Problem](#22221-example-using-condition-variables-for-producerconsumer-problem)
+    - [22.2.3. Semaphores Are A Special Case of Condition Variables](#2223-semaphores-are-a-special-case-of-condition-variables)
+  - [22.3. Locking Granularity](#223-locking-granularity)
+    - [22.3.1. Considerations for Locking Granularity](#2231-considerations-for-locking-granularity)
+    - [22.3.2. Overheads of Locking](#2232-overheads-of-locking)
+    - [22.3.3. Deadlocks](#2233-deadlocks)
+      - [22.3.3.1. Conditions for Deadlocks](#22331-conditions-for-deadlocks)
+      - [22.3.3.2. Example: High-level Deadlock](#22332-example-high-level-deadlock)
+      - [22.3.3.3. Ways to Prevent Deadlocks](#22333-ways-to-prevent-deadlocks)
+        - [22.3.3.3.1. Preventing Deadlocks by Ensuring Order](#223331-preventing-deadlocks-by-ensuring-order)
+        - [22.3.3.3.2. Preventing Deadlocks by Using `trylock`](#223332-preventing-deadlocks-by-using-trylock)
+  - [22.4. SUMMARY](#224-summary)
 
 
 <!--------------------------------{.gray}------------------------------>
@@ -5147,32 +5165,32 @@ int sem_post(sem_t *sem);
   - Set to 1 to share semaphore between processes (i.e. for IPC, `fork`s)
   - If set to 0, `fork`s will have a unshared, independent copies
 
-### `sem_init()`
+### 21.3.1. `sem_init()`
 ```int sem_init(sem_t *sem, int pshared, unsigned int value)```
 
 Initializes the semaphore pointed to by `sem`. The `pshared` argument determines whether the semaphore is shared between processes (`pshared != 0`) or threads within a process (`pshared == 0`). The `value` argument specifies the initial value of the semaphore.
 
-### `sem_destroy()`
+### 21.3.2. `sem_destroy()`
 ```int sem_destroy(sem_t *sem)```
 
 Destroys the semaphore pointed to by `sem`. After this call, the semaphore is no longer usable until it is reinitialized by `sem_init`.
 
-### `sem_wait()`
+### 21.3.3. `sem_wait()`
 ```int sem_wait(sem_t *sem)```
 
 Decrements (locks) the semaphore pointed to by `sem`. If the semaphore's value is greater than zero, then the decrement proceeds, and the function returns immediately. If the semaphore currently has the value zero, then the call blocks until it becomes possible to perform the decrement.
 
-#### `sem_trywait()`
+#### 21.3.3.1. `sem_trywait()`
 ```int sem_trywait(sem_t *sem)```
 
 Similar to `sem_wait`, but it's non-blocking. If the decrement can't be immediately performed, the function returns an error instead of blocking.
 
-### `sem_post()`
+### 21.3.4. `sem_post()`
 ```int sem_post(sem_t *sem)```
 
 Increments (unlocks) the semaphore pointed to by `sem`. If the semaphore's value consequently becomes greater than zero, then another process or thread blocked in a `sem_wait` call will be woken up and proceed to lock the semaphore.
 
-### 21.3.1. Example: Adding Order to Threads
+### 21.3.5. Example: Adding Order to Threads
 
 See [ordered-print.c](#example-threads-have-no-default-order) for how threads can be unordered; see ordering threads using semaphores below for how to fix it:
 
@@ -5577,7 +5595,7 @@ int main(int argc, char *argv[]) {
 }
 ```
 
-### SAMPLE OUTPUTS
+### 21.5.5. SAMPLE OUTPUTS
 Without semaphores (i.e. reading from empty slots & writing to filled slots):
 ```
 Emptying slot 0
@@ -5638,3 +5656,307 @@ Previously we used locks to ensure mutual exclusion, now we can use semaphores t
 
 <!--------------------------------{.gray}------------------------------>
 <div style="page-break-after: always;"></div>
+
+# 22. Locking (2023-10-27)
+
+## 22.1. Momitors
+
+- Built into some languages for easier use of locking with OOP (e.g. Java)
+- Could mark a method as monitored, and let the compiler handle locking
+  - An object can only have one thread active in its monitored methods
+- It's basically one mutex per object, automatically created by the compiler
+  - The compiler inserts calls to lock and unlock for you
+- PRO: prevents data races for you
+- CON: you only get one mutex per object --> limits code complexity
+
+### 22.1.1. Monitor Example: Java’s `synchronized` Keyword
+
+```java
+public class Account {
+  int balance;
+  public synchronized void deposit(int amount)  { balance += amount; }
+  public synchronized void withdraw(int amount) { balance -= amount; }
+}
+
+// transforms to (via compiler):
+
+public void deposit(int amount) {
+  lock(this.monitor); /* New */
+  balance += amount;
+  unlock(this.monitor); /* New */
+}
+public void withdraw(int amount) {
+  lock(this.monitor); /* New */
+  balance -= amount;
+  unlock(this.monitor); /* New */
+}
+```
+
+## 22.2. Condition Variables (via `pthread`)
+
+Behave like semaphores, but with a queue of waiting threads (instead of just 1 with semaphore) that you can put to sleep or wake up however you want (via `pthread_cond_t *cond`)
+- `pthread_cond_wait()` functions add this thread to the queue and put it to sleep (i.e. block it) until woken by `signal` or `broadcast`; **also unlocks the mutex before going to sleep and reacquires it before returning**
+  - `pthread_cond_signal` wakes up this thread (i.e. first thread in queue)
+  - `pthread_cond_broadcast` wakes up all threads
+  - `pthread_cond_timedwait` wakes up this thread after a certain time
+```c
+#include <pthread.h>
+
+int pthread_cond_init(pthread_cond_t *cond,
+                      const pthread_condattr_t *attr)
+int pthread_cond_destroy(pthread_cond_t *cond);
+int pthread_cond_signal(pthread_cond_t *cond);
+int pthread_cond_broadcast(pthread_cond_t *cond);
+int pthread_cond_wait(pthread_cond_t *cond, pthread_mutex_t *mutex);
+int pthread_cond_timedwait(pthread_cond_t *cond, pthread_mutex_t *mutex,
+                           const struct timespec *abstime);
+```
+
+### 22.2.1. Condition Variables MUST Be Paired With a Mutex
+
+Since we are managing a queue, we don't want to have data races on the queue itself, so we need a mutex to protect it.
+
+Any calls to `wait` must already hold the mutex
+- `signal` and `broadcast` may not
+
+***Q:*** why do any calls to `wait` must already hold the mutex? {.lr}
+> ***A:*** needs the mutex as an argument to unlock it before going to sleep (thread will hold the locked `mutex` before and after the call); when it returns back from sleep the first thing it will do is try and reacquire the mutex (still has mutual exclusion) {.lg}
+
+- One mutex can also protect multiple condition variables
+  - We'll only consider calls to `wait` and `signal`
+
+### 22.2.2. `pthread_cond_wait()` Does NOT Contain Data Races
+
+Understand what `wait` does (for condition variables!)
+
+The thread calling `pthread_cond_wait()`...
+1. ...adds itself to the queue for the condition variable
+2. ...unlocks the mutex
+3. ...gets blocked (put itself to sleep; can no longer be scheduled to run)
+
+The thread calling `wait` needs another thread to call `signal` or `broadcast`, then if it’s selected...
+1. ...it gets unblocked (can be scheduled to run)
+2. ...tries to lock the mutex again,`wait` returns when it gets it
+
+#### 22.2.2.1. Example: Using Condition Variables for Producer/Consumer Problem
+
+```c
+pthread_mutex_t mutex;
+int nfilled;   // single variable to keep track of num slots filled
+               // using semaphore would require 2 semaphores
+pthread_cond_t has_filled; // cond. var. queue for filled slots
+pthread_cond_t has_empty;  // cond. var. queue for filled slots
+
+void producer() {
+  // produce data
+  pthread_mutex_lock(&mutex); // acquire lock
+  while (nfilled == N) { // while all the slots are filled
+    // resume at wait call after signal
+    pthread_cond_wait(&has_empty, // wait for empty slot
+                      &mutex); // put the producer thread to sleep (give mutex after wait)
+  }
+
+  // REACHED IF THERE IS AN EMPTY SLOT
+
+  // fill a slot
+  ++nfilled;
+  pthread_cond_signal(&has_filled); // wake up one of the threads waiting for a filled slot
+  pthread_mutex_unlock(&mutex);
+}
+
+void consumer() {
+  pthread_mutex_lock(&mutex);
+  while (nfilled == 0) { // while all the slots are empty
+    // resume at wait call after signal
+    pthread_cond_wait(&has_filled, // wait for filled slot
+                      &mutex); // put the consumer thread to sleep (give mutex after wait)
+  }
+
+  // REACHED IF THERE IS A FILLED SLOT
+
+  // empty a slot
+  --nfilled;
+  pthread_cond_signal(&has_empty); // wake up one of the threads waiting for an empty slot
+  pthread_mutex_unlock(&mutex);
+  // consume data
+}
+```
+
+***Q:*** What is the issue with the following code? {.lr}
+```c
+// Q:
+
+/* Thread 1 */
+pthread_mutex_lock(&mutex);
+while (!condition) {
+  pthread_cond_wait(&cond, &mutex);
+}
+pthread_mutex_unlock(&mutex);
+
+/* Thread 2 */
+condition = true;
+pthread_cond_signal(&cond);
+```
+
+- ***A:*** idk {.lg}
+  - let `condition = false` & condition variable `cond` is empty queue (`[]`) to start off with
+  - `pthread_mutex_lock(&mutex);` --- acquire the lock
+  - `while (!condition) {` --- check the condition, it's false so we go into the loop
+  - <<<SWITCH TO THREAD 2>>>
+  - `condition = true;`
+  - `pthread_cond_signal(&cond);` --- wake up a thread in the queue (but there is no thread in the queue)
+  - <<<SWITCH TO THREAD 1>>>
+  - `pthread_cond_wait(&cond, &mutex);` --- add itself to the queue (`[T1]`) and put itself to sleep
+  - **PROBLEM:** the thread is asleep and will never wake up because there is no thread in the queue to wake it up = **deadlock**{.lr}
+
+***Q:*** how do we resolve this issue? {.lr}
+> ***A:*** make `condition = true;` a critical section **using the same lock as thread 1** {.lg}
+
+```c
+// ...
+
+// thread 1 has the lock, so thread 2 will wait until thread 1 releases the lock
+// via the `pthread_cond_wait(&cond, &mutex);` call
+// i.e. thread 2 will wait until thread 1 is added to the cond. var. queue
+pthread_mutex_lock(&mutex);
+// after thread 1 unlocks, thread 2 will lock here...
+condition = true;
+pthread_mutex_unlock(&mutex); // ...which is why we need to unlock it immediately after
+
+pthread_cond_signal(&cond); // wake up thread in queue
+```
+
+***Q:*** can we change the `while` loop to an `if` statement? {.lr}
+> ***A:*** while it will work for the code above, it does not for the code below; in general it is a good idea to use `while` for the case if the boolean condition can change value multiple times {.lg}
+
+***Q:*** What is the issue with the following code? {.lr}
+```c
+/* Thread 1 */
+pthread_mutex_lock(&mutex);
+if (!condition) {
+  pthread_cond_wait(&cond, &mutex);
+}
+// What could happen here?
+pthread_mutex_unlock(&mutex);
+
+/* Thread 2 */
+pthread_mutex_lock(&mutex);
+condition = true;
+pthread_mutex_unlock(&mutex);
+pthread_cond_signal(&cond);
+
+/* Thread 3 */
+pthread_mutex_lock(&mutex);
+condition = false;
+pthread_mutex_unlock(&mutex);
+```
+
+- ***A:*** basically, when we context switch back to right AFTER `pthread_cond_wait(&cond, &mutex);` after thread 2 and 3 run (i.e. `condition` is false), the code is able to continue to the unlock line even instead of looping in the `while (!condition)`, **which is not what we want**{.lr} {.lg}
+  - see https://www.youtube.com/live/obmELyGdLyA?si=K9-4aSHTuv89ANOV&t=1672 for a walkthrough
+
+### 22.2.3. Semaphores Are A Special Case of Condition Variables
+
+- Semaphores are a special case of condition variables
+  - Semaphores go to sleep when value is 0
+  - Semaphores wake up when value is greater than 0
+- Is technically possible to implement each one using the other, but can get messy
+- For complex conditions condition variables offer much better clarity
+
+## 22.3. Locking Granularity
+
+Locks are needed to prevent data races, but how much of our code should be protected by locks?
+- Lock large sections of your program, or divide the locks and use smaller sections?
+- What if you want to parallelize your hash table?
+- Locks are expensive, so we want to minimize the amount of code protected by locks
+
+### 22.3.1. Considerations for Locking Granularity
+
+1. Overhead
+2. Contention
+3. Deadlocks
+
+### 22.3.2. Overheads of Locking
+
+The more locks you have, the greater each cost is going to be:
+
+1. Memory allocated
+2. Initiailization and destruction time
+3. Time for Acquiring and releasing locks
+
+### 22.3.3. Deadlocks
+
+The more locks you have, the more you have to worry about deadlocks.
+
+How many ways can you
+
+#### 22.3.3.1. Conditions for Deadlocks
+
+1. Mutual Exclusion (of course for simple locks)
+2. Hold and Wait (you have a lock and try to acquire another)
+3. No Preemption (we can't take simple locks away)
+4. Circular Wait (waiting for a lock held by another process)
+
+#### 22.3.3.2. Example: High-level Deadlock
+
+Consider two processors trying to get two locks:
+```md
+**Thread 1**
+Get Lock 1
+Get Lock 2
+Release Lock 2
+Release Lock 1
+```
+```md
+**Thread 2**
+Get Lock 2
+Get Lock 1
+Release Lock 1
+Release Lock 2
+```
+
+***Q:*** how does a deadlock occur above? {.lr}
+> ***A:*** Thread 1 gets Lock 1, then Thread 2 gets Lock 2, now they both wait for each other -> **deadlock** {.lg}
+
+#### 22.3.3.3. Ways to Prevent Deadlocks
+
+We can prevent deadlocks by...
+1. ...[ensuring order](#preventing-deadlocks-by-ensuring-order)
+2. ...[using `trylock`](#preventing-deadlocks-by-using-trylock)
+
+##### 22.3.3.3.1. Preventing Deadlocks by Ensuring Order
+
+This code will not deadlock, you can only get `l2` if you have `l1`
+```c
+void f1() {
+    locktype_lock(&l1);
+    locktype_lock(&l2);
+    // protected code
+    locktype_unlock(&l2);
+    locktype_unlock(&ll);
+}
+```
+
+##### 22.3.3.3.2. Preventing Deadlocks by Using `trylock`
+
+Recall for `pthread` there is a `trylock` function that returns 0 if the lock was acquired, and 1 if it was not (**useful for when we cannot order locks**):
+
+This code will not deadlock, it will give up `l1` if it can’t get `l2`:
+```c
+void f2() {
+    locktype_lock(&l1);
+    while (locktype_trylock(&l2) != 0) {
+        locktype_unlock(&l1);
+        // wait
+        locktype_lock(&l1);
+    }
+    // protected code
+    locktype_unlock(&l2);
+    locktype_unlock(&ll);
+}
+```
+
+## 22.4. SUMMARY
+We have another tool to ensure order:
+- Condition variables are clearer for complex condition signaling
+- Locking granularity matters
+- You must prevent deadlocks
