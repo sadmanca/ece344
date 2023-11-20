@@ -351,6 +351,37 @@
   - [25.3. SUMMARY](#253-summary)
   - [25.4. PRACTICE](#254-practice)
 - [26. More Midterm Review (2023-11-14)](#26-more-midterm-review-2023-11-14)
+- [27. Filesystems (2023-11-16)](#27-filesystems-2023-11-16)
+  - [27.1. POSIX Filesystem Hierarchy](#271-posix-filesystem-hierarchy)
+    - [27.1.1. Filesystem Hierarchy](#2711-filesystem-hierarchy)
+    - [27.1.2. RELATIVE vs. ABSOLUTE Paths](#2712-relative-vs-absolute-paths)
+      - [27.1.2.1. Special Symbols for Directories](#27121-special-symbols-for-directories)
+  - [27.2. File System Access API](#272-file-system-access-api)
+    - [27.2.1. Accessing Files SEQUENTIALLY vs. RANDOMLY](#2721-accessing-files-sequentially-vs-randomly)
+    - [27.2.2. (Random) FILE Access API](#2722-random-file-access-api)
+      - [27.2.2.1. `open()`](#27221-open)
+      - [27.2.2.2. `lseek()`](#27222-lseek)
+    - [27.2.3. DIRECTORY Access API](#2723-directory-access-api)
+  - [27.3. File Tables](#273-file-tables)
+    - [27.3.1. File Tables Are Per-Process (i.e. Stored in PCB)](#2731-file-tables-are-per-process-ie-stored-in-pcb)
+      - [27.3.1.1. LOF vs. GOF Tables](#27311-lof-vs-gof-tables)
+      - [27.3.1.2. GOF Table](#27312-gof-table)
+      - [27.3.1.3. `vnode` (Virtual Mode)](#27313-vnode-virtual-mode)
+    - [27.3.2. File Tables After `fork()`](#2732-file-tables-after-fork)
+      - [27.3.2.1. "Gotchas" with `fork()`](#27321-gotchas-with-fork)
+      - [27.3.2.2. Relationship Between Number of LOF and GOF Entries](#27322-relationship-between-number-of-lof-and-gof-entries)
+  - [27.4. How Do We Store Files?](#274-how-do-we-store-files)
+    - [27.4.1. Contiguous Allocation](#2741-contiguous-allocation)
+      - [27.4.1.1. Contiguous Allocation Is Fast, If There Are No Modifications](#27411-contiguous-allocation-is-fast-if-there-are-no-modifications)
+        - [27.4.1.1.1. FRAGMENTATION (= Wasted Space)](#274111-fragmentation--wasted-space)
+    - [27.4.2. Linked Allocation (Free List of Pages)](#2742-linked-allocation-free-list-of-pages)
+      - [27.4.2.1. Linked Allocation Has Slow Random Access](#27421-linked-allocation-has-slow-random-access)
+    - [27.4.3. File Allocation Table (FAT)](#2743-file-allocation-table-fat)
+      - [27.4.3.1. File Allocation Table (FAT) is Similar to Linked Allocation](#27431-file-allocation-table-fat-is-similar-to-linked-allocation)
+    - [27.4.4. Indexed Allocation](#2744-indexed-allocation)
+      - [27.4.4.1. For Indexed Allocation, Each File Needs an Index Block](#27441-for-indexed-allocation-each-file-needs-an-index-block)
+      - [27.4.4.2. Example: Calculating Maximum File Size for Indexed Allocation](#27442-example-calculating-maximum-file-size-for-indexed-allocation)
+  - [27.5. SUMMARY](#275-summary)
 
 
 <!--------------------------------{.gray}------------------------------>
@@ -6493,7 +6524,7 @@ $ meson setup -Db_sanitize=address ...
   - Lower endurance (number of writes)
   - More complicated to write drivers for
 
-![A SSD Contains Pages](images/lec23/2023-11-19_12-03-55.png)
+![A SSD Contains Pages](images/lec25/2023-11-19_12-03-55.png)
 
 ### 25.1.1. SSD R/W Speeds
 
@@ -6540,7 +6571,7 @@ Pages are typically 4 KiB
 ### 25.2.2. RAID 0 (Striping)
 
 Data stripes (128KB and 256KB) are distributed over disks:
-![RAID 0](images/lec23/raid-0.svg)
+![RAID 0](images/lec25/raid-0.svg)
 
 - RAID 0 is for performance only (i.e. no redundancy)
   - extreme opposite of [RAID 1](#raid-1-mirroring)
@@ -6554,7 +6585,7 @@ Data stripes (128KB and 256KB) are distributed over disks:
 
 Every disk in the array has a mirrored copy of all the data:
   - extreme opposite of [RAID 0](#raid-1-mirroring)
-![RAID 1](images/lec23/raid-1.svg)
+![RAID 1](images/lec25/raid-1.svg)
 
 - PROS: {.lg}
   - Good reliability, as long as one disk remains, no data loss
@@ -6569,7 +6600,7 @@ Every disk in the array has a mirrored copy of all the data:
 
 Data stripes distributed over disks with a dedicated parity disk (p = parity):
 - Parity stores `xor` of copies 1-3, any one copy can be reconstructed
-- ![RAID 4](images/lec23/raid-4.svg)
+- ![RAID 4](images/lec25/raid-4.svg)
 
 - PROS: {.lg}
   - We get $N − 1$ times performance (disregarding parity disk)
@@ -6584,7 +6615,7 @@ Data stripes distributed over disks with a dedicated parity disk (p = parity):
 
 Data stripes distributed over disks and each disk takes turns with parity blocks:
 - Single parity block for each group of data blocks (where the disk containing the parity block changes for each group)
-![RAID 5](images/lec23/raid-5.svg)
+![RAID 5](images/lec25/raid-5.svg)
 
 - PROS: {.lg}
   - Same as [RAID 4](#raid-4-dedicated-parity-disk)...
@@ -6595,7 +6626,7 @@ Data stripes distributed over disks and each disk takes turns with parity blocks
 ### 25.2.6. RAID 6 (Double Distributed Parity Block Per Stripe)
 
 RAID 6 extends RAID 5 by adding another parity block per stripe; thus, it uses block-level striping with two parity blocks distributed across all member disks.
-![RAID 6](images/lec23/raid-6.svg)
+![RAID 6](images/lec25/raid-6.svg)
 
 - PROS: {.lg}
   - Same as [RAID 5](#raid-5-distributed-parity)...
@@ -6724,3 +6755,304 @@ RAID 6 extends RAID 5 by adding another parity block per stripe; thus, it uses b
 - [YouTube (Section 1)](https://youtube.com/live/ySedCf0Gc3s)
 - [YouTube (Section 2)](https://youtube.com/live/tJNWbF3kSOM)
 - [YouTube (Section 3)](https://youtube.com/live/mONnaMN_4NI)
+
+
+
+
+
+
+
+
+
+
+<!--------------------------------{.gray}------------------------------>
+
+
+
+
+
+
+
+<hr style="border:30px solid #FFFF; margin: 100px 0 100px 0; {.gray}"> </hr>
+
+
+
+
+
+
+<!--------------------------------{.gray}------------------------------>
+<div style="page-break-after: always;"></div>
+
+# 27. Filesystems (2023-11-16)
+
+## 27.1. POSIX Filesystem Hierarchy
+
+### 27.1.1. Filesystem Hierarchy
+
+Usual layout of a POSIX Filesystem (here: parts of FHS):
+
+```mermaid
+graph TD;
+  A["/"] --> B1[bin/];
+  A --> B2[dev/];
+  A --> B3[etc/];
+  A --> B4[home/];
+  A --> B5[mnt/];
+  B4 --> C1[user1/];
+  C1 --> D1[Documents/];
+  D1 --> E1[todo.txt];
+  B5 --> C2[usb/];
+```
+### 27.1.2. RELATIVE vs. ABSOLUTE Paths
+
+Relative paths are calculated from current working directory (`$PWD` = `/home/user1/`); e.g.:
+
+- `todo.txt`
+  - RELATIVE path --- `./Documents/todo.txt`
+  - ABSOLUTE path --- `/home/user1/Documents/todo.txt`
+- `usb/`
+  - RELATIVE path --- `./usb/`
+  - ABSOLUTE path --- `/mnt/usb/`
+
+#### 27.1.2.1. Special Symbols for Directories
+
+- `.` --- current directory
+- `..` --- parent directory
+- `~` --- user's home directory (`$HOME`)
+
+## 27.2. File System Access API
+
+### 27.2.1. Accessing Files SEQUENTIALLY vs. RANDOMLY
+
+After opening a file, we can read/write to it in two ways:
+- Sequential access
+  - Each read advances the position inside the file
+  - Writes are appended and the position set to the end afterwards
+- Random access
+  - Records can be read/written to the file in any order
+  - A specific position is required for each operation
+
+### 27.2.2. (Random) FILE Access API
+
+#### 27.2.2.1. `open()`
+
+Open a file:
+```c
+int open(const char *pathname, int flags, mode_t mode);
+```
+- flags specify which operations
+  - `O_RDWR`
+  - `O_WRONLY`
+  - `O_RDWR`
+  - also: `O_APPEND` moves the position to the end of the file initially
+
+#### 27.2.2.2. `lseek()`
+
+Change the position of the file pointer to some offset:
+```c
+off_t lseek(int fd, off_t offset, int whence);
+```
+- `whence` specifies the reference point for the offset
+  - `SEEK_SET` --- offset is ABSOLUTE to the start of the file
+  - `SEEK_CUR` --- offset is relative to the current position
+  - `SEEK_END` --- offset is relative to the end of the file
+    - e.g. `lseek(..., offset = -1, whence = SEEK_END)` moves file pointer to second last byte before the end of the file
+    - setting file pointer to beyond the end of the file raises error
+
+### 27.2.3. DIRECTORY Access API
+
+```c
+DIR *opendir(char *path); // open directory
+struct dirent *readdir(DIR *dir); // get next item in dir
+int closedir(DIR *dir); // close directory
+```
+
+```c
+// e.g.
+
+
+void print_directory_contents(char *path) {
+    DIR *dir = opendir(path);
+    struct dirent *item;
+    while (item = readdir(dir)) {
+        printf("- %s\n", item->d_name);
+    }
+    closedir(path);
+}
+```
+
+## 27.3. File Tables
+
+### 27.3.1. File Tables Are Per-Process (i.e. Stored in PCB)
+
+#### 27.3.1.1. LOF vs. GOF Tables
+
+- Previously we described file descriptors are pointers to *something* in a PCB's file table
+- Now, we can fully flesh out that definition
+
+- Each process has a **local open file table (LOF table)** in its PCB
+  - Each file descriptor is an index in the LOF table
+  - Each index has an element that points to an entry in the system-wide **global open file table (GOF table)**
+    - the GOF table is shared by all processes
+    - the LOF table is per-process
+- When multiple processes have a file descriptor open to the same file, they can either...
+  - ...point to the same GOF entry ([only through `fork()`!](#file-tables-after-fork)), or...
+  - ...to different entries in the GOF table that have `vnode` objects pointing to the same file
+
+![File Tables are Per PCB](images/lec27/2023-11-19_13-44-40.png)
+
+#### 27.3.1.2. GOF Table
+
+- The GOF table entries hold information about:
+  - `position` --- what [`lseek()` manipulates](#lseek) (i.e. where the file pointer is)
+  - `flags` --- used when [`open()`-ing the file](#open)
+  - `*vnode` --- a pointer to a [vnode object](#vnode-virtual-mode) (i.e. a pointer to the file itself)
+
+#### 27.3.1.3. `vnode` (Virtual Mode)
+
+- Holds information about the file
+  - vnodes can represent regular files, pipes, network sockets, etc.
+
+### 27.3.2. File Tables After `fork()`
+
+- PCB is copied on `fork()`
+  - LOF table gets inherited (i.e. points to same entry)
+  - Both parent and child PCBs point to the same GOF table entry
+
+![Parent and child point to same GOF table entry](images/lec27/2023-11-19_13-48-03.png)
+
+#### 27.3.2.1. "Gotchas" with `fork()`
+
+- Current position in file is shared between both processes
+- Seek (i.e. read or write) in one process leads to seek in all other processes using the same GOF entry
+  - e.g. if one process reads 10 bytes, the other process will read the next 10 bytes (non-deterministic since scheduler decides which process runs first)
+  - e.g. if a child just reads to the end of the file, the parent will read nothing
+  - is intended behavior for things like `stdin`, `stdout` to terminal
+- Opening the same file in both processes after forking creates multiple GOF entries (that have `vnode` objects pointing to the same file)
+
+#### 27.3.2.2. Relationship Between Number of LOF and GOF Entries
+
+***Q:*** {.lr} Assume there are no previously opened files (not even the standard ones); how many LOF and GOF entries exist afte running the following code?
+```c
+open("todo.txt", O_RDONLY);
+fork();
+open("b.txt", O_RDONLY);
+```
+
+- ***A:*** 2 LOF entries each, and 3 GOF entries in total {.lg}
+  - before `fork()`, there is 1 LOF each and 1 GOF entry in total (both process LOF entries point to same GOF entry)
+  - after `fork()`, each call to `open()` in each process creates a new LOF entry and a new GOF entry (so now there are 2 LOF entries each and 3 GOF entries in total)
+  - ![file tables after fork()](images/lec27/2023-11-19_14-12-52.png)
+
+## 27.4. How Do We Store Files?
+
+### 27.4.1. Contiguous Allocation
+
+- Store files in contiguous blocks (i.e. adjacent) on disk
+  - Each block is 4-8 KiB in size
+  - Files are broken up to fit in blocks
+  - e.g. consider a green, red, and blue file as shown below; if we need to increase the red file's size, we can't because there's no contiguous space left (so need to either move the blue file or move the red file to a new location)
+  - ![Contiguous Allocation](images/lec27/2023-11-19_14-16-42.png)
+
+***Q:*** what do you need to describe a file when using contiguous allocation? {.lr}
+> ***A:*** start position + (end position **OR** number of blocks taken up) {.lg}
+
+#### 27.4.1.1. Contiguous Allocation Is Fast, If There Are No Modifications
+
+- PROS: {.lg}
+  - Space efficient
+    - Only start block and # of blocks need to be stored
+  - Fast random access
+    - $\text{block} = \lfloor \frac{\text{offset}}{\text{blocksize}} \rfloor = \text{floor}(\frac{\text{offset}}{\text{blocksize}})$
+- CONS: {.lr}
+  - Files can not grow easily; i.e. both [external and internal fragmentation](#fragmentation--wasted-space)
+
+##### 27.4.1.1.1. FRAGMENTATION (= Wasted Space)
+
+2 types of fragmentation:
+- INTERNAL fragmentation (may not fill a block; **wasting space WITHIN a block**)
+  - e.g. if we have a 4 KiB block and a 7 KiB file, we still need to use 2 blocks (where we're wasting 1 KiB of space in one block)
+- EXTERNAL fragmentation when files are deleted or truncated (**wasting space OUTSIDE a block/wasted blocks**)
+  - e.g. if there was a 1 block gap between the red and blue file, then that would be external fragmentation (since we can't use that 1 block for anything because it's too small for any file)
+
+### 27.4.2. Linked Allocation (Free List of Pages)
+
+Store files in linked blocks (i.e. non-adjacent) on disk
+- end of file indicated by point to nothing or a special value
+- ![Linked Allocation](images/lec27/2023-11-19_15-23-02.png)
+
+***Q:*** what do you need to describe a file when using linked allocation? {.lr}
+> ***A:*** start position (+ pointer to next block) {.lg}
+
+#### 27.4.2.1. Linked Allocation Has Slow Random Access
+
+- PROS: {.lg}
+  - Space efficient
+    - Only start block needs to be stored
+    - Blocks need to store a pointer to the next block (block is slightly smaller)
+  - Files can grow/shrink
+    - No external fragmentation (only internal fragmentation)
+- CONS: {.lr}
+  - Slow random access
+    - Need to walk each block (i.e. start at the beginning and follow the pointers until you get to the block you want)
+    - Each block may be located far away (it will never be cached)
+
+### 27.4.3. File Allocation Table (FAT)
+
+Ues a list for blocks, as well as a separate table containing all blocks for random access
+
+![File Allocation Table (FAT)](images/lec27/2023-11-19_15-24-48.png)
+
+#### 27.4.3.1. File Allocation Table (FAT) is Similar to Linked Allocation
+
+- PROS {.lg}
+  - Files can grow/shrink
+    - No external fragmentation (only internal fragmentation)
+  - Fast random access
+    - FAT can be held in memory/cache
+- CONS: {.lr}
+  - FAT size is linear to disk size: memory usage can become very large
+    - Doesn't scale well to large disks (worse performance as disk size increases)
+
+### 27.4.4. Indexed Allocation
+
+Indexed allocation maps each block directly:
+- use a block to maintain an array of indices to blocks for that file
+  - e.g. in the diagram below, the index block (red) has pointers to the blocks containing data for the ffile (green), in order of the file's data
+    - actual blocks of data are located anywhere on disk
+    - array size is limited by the size of the index block (i.e. the number of pointers that can fit in the index block); can be smaller than size of the index block if the file is smaller than a single block
+    - similar idea as page tables!
+
+![Indexed Allocation](images/lec27/2023-11-19_15-26-06.png)
+
+#### 27.4.4.1. For Indexed Allocation, Each File Needs an Index Block
+
+- PROS {.lg}
+  - Files can still grow/shrink
+    - No external fragmentation (only internal fragmentation)
+  - Fast random access
+- CONS: {.lr}
+  - File size limited by the maximum size of the index block (fit it in one block)
+
+#### 27.4.4.2. Example: Calculating Maximum File Size for Indexed Allocation
+
+- ***Q:*** What is the maximum size of a file managed by this index block, given the below information? {.lr}
+  - An index block stores pointers to data blocks only (no meta information)
+  - A disk block is 8 KiB in size
+  - A pointer to a block is 4 Bytes
+
+- ***A:***  {.lg}
+  - $\text{size of block} = 8 \text{ KiB} = 2^{13} \text{ B}$
+  - $\text{size of pointer} = 4 \text{ B}$
+  -
+  - $\frac{\text{\# of pointers}}{\text{block}} = \frac{\text{8 KiB}}{\text{4 B}} \times \frac{2^{13} \text{ B}}{2^2 \text{ B}} = 2^{11}$
+  - $\text{\# of addressable blocks} = \text{\# of pointers}$
+  -
+  - $\text{Total \# of bytes} = (\frac{\text{\# of pointers}}{\text{block}}) \times (\text{\# of addressable blocks}) = (2^{11}) \times (2^{13}) = 2^{24} \text{ B} = \text{16 MiB}$
+
+## 27.5. SUMMARY
+
+Filesystems enable persistence and describe how files are stored on disk:
+- API-wise you can open files, and change the position to read/write at
+- Each process has a local open file and there’s a global open file table
+- There’s multiple allocation strategies: contiguous, linked, FAT, indexed
