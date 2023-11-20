@@ -382,6 +382,24 @@
       - [27.4.4.1. For Indexed Allocation, Each File Needs an Index Block](#27441-for-indexed-allocation-each-file-needs-an-index-block)
       - [27.4.4.2. Example: Calculating Maximum File Size for Indexed Allocation](#27442-example-calculating-maximum-file-size-for-indexed-allocation)
   - [27.5. SUMMARY](#275-summary)
+- [28. inodes (2023-11-17)](#28-inodes-2023-11-17)
+  - [28.1. inode Description](#281-inode-description)
+    - [28.1.1. Hard Links](#2811-hard-links)
+      - [28.1.1.1. Multiple Hard Links Can Point to the Same inode](#28111-multiple-hard-links-can-point-to-the-same-inode)
+      - [28.1.1.2. Seeing inodes via `ls -i`](#28112-seeing-inodes-via-ls--i)
+      - [28.1.1.3. Setting inodes via `ln`](#28113-setting-inodes-via-ln)
+        - [28.1.1.3.1. inodes Persist After `mv`](#281131-inodes-persist-after-mv)
+        - [28.1.1.3.2. `rm` Just Removes a Hard Link](#281132-rm-just-removes-a-hard-link)
+    - [28.1.2. Soft Links (Simlinks)](#2812-soft-links-simlinks)
+      - [28.1.2.1. Setting Soft Links via `ln -s`](#28121-setting-soft-links-via-ln--s)
+        - [28.1.2.1.1. Renaming/Moving Soft Link Targets Breaks Soft Links](#281211-renamingmoving-soft-link-targets-breaks-soft-links)
+        - [28.1.2.1.2. Broken Soft Link Pointing To A Broken Soft Link](#281212-broken-soft-link-pointing-to-a-broken-soft-link)
+    - [28.1.3. In UNIX, Everything is a File](#2813-in-unix-everything-is-a-file)
+    - [28.1.4. What Data is Stored in an inode?](#2814-what-data-is-stored-in-an-inode)
+    - [28.1.5. Filesystem Caches Speed Up Writing to Disks](#2815-filesystem-caches-speed-up-writing-to-disks)
+    - [28.1.6. Journaling Filesystem (In Case of Crashes)](#2816-journaling-filesystem-in-case-of-crashes)
+  - [28.2. SUMMARY](#282-summary)
+  - [28.3. PRACTICE](#283-practice)
 
 
 <!--------------------------------{.gray}------------------------------>
@@ -2655,20 +2673,20 @@ We would get the following virtual-->physical address translations:
 
 ***Q: a)*** How many virtual pages are there? {.lr}
 > ***A:*** $\frac{2^8}{2^6} = 4$ {.lg}
-  - $\text{\# of virtual pages} = \frac{\text{\# of virtual addresses}}{\text{\# of bits per page}}$
+  - $\text{num of virtual pages} = \frac{\text{num of virtual addresses}}{\text{num of bits per page}}$
 
 > ---
 
 ***Q: b)*** How many physical pages are there? {.lr}
 > ***A:*** $\frac{2^{10}}{2^6} = 16$ {.lg}
-  - $\text{\# of physical pages} = \frac{\text{\# of physical addresses}}{\text{\# of bits per page}}$
+  - $\text{num of physical pages} = \frac{\text{num of physical addresses}}{\text{num of bits per page}}$
 
 > ---
 
 ***Q: c)*** How many entries are in the page table (i.e. # of PTEs)? {.lr}
 > ***A:*** $4$ {.lg}
-  - $\text{\# of PTEs} = 2^{\text{(\# of physical bits) - (\# of virtual bits)}}$
-    - **if $\text{\# of physical bits} > \text{\# of virtual bits}$**
+  - $\text{num of PTEs} = 2^{\text{(num of physical bits) - (num of virtual bits)}}$
+    - **if $\text{num of physical bits} > \text{num of virtual bits}$**
     - otherwise $1$ (since there are more than enough virtual addresses to represent each physical address in one page, so only one PTE)
 
 > ---
@@ -2691,7 +2709,7 @@ We would get the following virtual-->physical address translations:
 ## 11.8. Each Process Gets Its Own Page Table
 - When you `fork()` a process, it will copy the page table from the parent
    -  Turn off the write permission so the kernel can implement copy-on-write
-- Problem is there are $2^{27}}$ entries in the page table, each one is 8 bytes
+- Problem is there are $2^{27}$ entries in the page table, each one is 8 bytes
   - means the page table would be 1 GiB
 - Note that RISC-V translates a 39-bit virtual to a 56-bit physical address
   - It has 10 bits to spare in the PTE and could expand
@@ -2770,7 +2788,7 @@ Shares all memory with the parent (means less overhead since page tables aren't 
   - each L2 page table points to $2^9$ L1 page tables
     - each L1 page table points to $2^9$ L0 page tables
       - each L0 page table points to $2^9$ PPNs
-  - $\text{total \# of PPNs} = (2^9)^3 = 2^{27} =$ same # of pages as a single page table
+  - $\text{total num of PPNs} = (2^9)^3 = 2^{27} = \text{same num of pages as a single page table} $
 
 ---
 
@@ -3040,16 +3058,16 @@ Assume we have a 32-bit virtual address with a page size of 4096 bytes and a PTE
 
 Want each page table to fit into a single page
 - Find the number of PTEs we could have in a page ($2^{10}$)
-  - ${log_2(\text{\# PTEs per page})}$ is the number of bits to index a page table
-- $\text{\# of levels} = \lceil \frac{\text{(VIRTUAL bits) - (OFFSET bits)}}{\text{INDEX bits}} \rceil$
+  - ${log_2(\text{num PTEs per page})}$ is the number of bits to index a page table
+- $\text{num of levels} = \lceil \frac{\text{(VIRTUAL bits) - (OFFSET bits)}}{\text{INDEX bits}} \rceil$
 
 ***Q: a)*** given a 32-bit virtual address, 4096-byte page size, & 4-byte PTE, how many entries can we fit onto our (page-sized) page table? {.lr}
 > ***A:*** $\frac{2^{12}}{2^2} = 2^{10}  = 1024$ entries {.lg}
-  - $\frac{\text{\# of PTEs}}{page} = \frac{\text{\# of pages}}{\text{\# of PTEs}}$
+  - $\frac{\text{num of PTEs}}{page} = \frac{\text{num of pages}}{\text{num of PTEs}}$
 
 ***Q: b)*** how many levels of page tables do we need given the previous requirements? {.lr}
-- ***A:*** $\text{\# of levels} = \lceil \frac{\text{(VIRTUAL bits) - (OFFSET bits)}}{\text{INDEX bits}} \rceil = \lceil \frac{32 - 12}{10} \rceil = \lceil \frac{20}{10} \rceil = \lceil 2 \rceil = 2$ levels of page tables {.lg}
-  - makes sense since the size of each level (= \# of entries in each page table) is 10 bits ($2^{10}$ entries), so: L1 (10 bits), L0 (10 bits), offset (12 bits) ==> **32 bits (given size of virtual address!)**{.g}
+- ***A:*** $\text{num of levels} = \lceil \frac{\text{(VIRTUAL bits) - (OFFSET bits)}}{\text{INDEX bits}} \rceil = \lceil \frac{32 - 12}{10} \rceil = \lceil \frac{20}{10} \rceil = \lceil 2 \rceil = 2$ levels of page tables {.lg}
+  - makes sense since the size of each level (= num of entries in each page table) is 10 bits ($2^{10}$ entries), so: L1 (10 bits), L0 (10 bits), offset (12 bits) ==> **32 bits (given size of virtual address!)**{.g}
 
 
 ## 13.4. Speeding Up Page Table Implementation via Caching
@@ -7045,10 +7063,10 @@ Indexed allocation maps each block directly:
   - $\text{size of block} = 8 \text{ KiB} = 2^{13} \text{ B}$
   - $\text{size of pointer} = 4 \text{ B}$
   -
-  - $\frac{\text{\# of pointers}}{\text{block}} = \frac{\text{8 KiB}}{\text{4 B}} \times \frac{2^{13} \text{ B}}{2^2 \text{ B}} = 2^{11}$
-  - $\text{\# of addressable blocks} = \text{\# of pointers}$
+  - $\frac{\text{num of pointers}}{\text{block}} = \frac{\text{8 KiB}}{\text{4 B}} \times \frac{2^{13} \text{ B}}{2^2 \text{ B}} = 2^{11}$
+  - $\text{num of addressable blocks} = \text{num of pointers}$
   -
-  - $\text{Total \# of bytes} = (\frac{\text{\# of pointers}}{\text{block}}) \times (\text{\# of addressable blocks}) = (2^{11}) \times (2^{13}) = 2^{24} \text{ B} = \text{16 MiB}$
+  - $\text{Total num of bytes} = (\frac{\text{num of pointers}}{\text{block}}) \times (\text{num of addressable blocks}) = (2^{11}) \times (2^{13}) = 2^{24} \text{ B} = \text{16 MiB}$
 
 ## 27.5. SUMMARY
 
@@ -7056,3 +7074,303 @@ Filesystems enable persistence and describe how files are stored on disk:
 - API-wise you can open files, and change the position to read/write at
 - Each process has a local open file and there’s a global open file table
 - There’s multiple allocation strategies: contiguous, linked, FAT, indexed
+
+
+
+
+
+
+
+
+
+<!--------------------------------{.gray}------------------------------>
+
+
+
+
+
+
+
+<hr style="border:30px solid #FFFF; margin: 100px 0 100px 0; {.gray}"> </hr>
+
+
+
+
+
+
+<!--------------------------------{.gray}------------------------------>
+<div style="page-break-after: always;"></div>
+
+# 28. inodes (2023-11-17)
+
+## 28.1. inode Description
+
+An inode describes a file system object (inc. files and directories); i.e. how you actually refer to the contents of a file:
+- inodes hold metadata and pointers to blocks
+  - Smaller files only use direct pointers
+  - Larger files have additional index nodes with pointers to additional blocks
+  - Very small files can have it’s contents directly inside the inode (e.g. after `touch`-ing a file, its file size is 0)
+- the diagram below illustrates all the metadata stored in an inode
+  - `mode` --- all permissions that you see when you do `ls`
+  - `owners` --- whichever, whoever, whatever (group) owns the file
+  - `timestamps` --- last modified, first created
+  - `size block count` --- number of blocks taken up
+  - `direct blocks` --- pointers to blocks that contain the contents of the file
+    - if the file is less than 12 blocks, then pointers to blocks are stored on the inode itself (i.e. point directly to block containing data)
+    - if the file is more than 12 blocks, then pointers to blocks are stored in the indirect blocks
+  - `single indirect blocks` --- points to a block that contains pointers to blocks that contain the contents of the file (same as indexed allocation)
+    - used for up to $12 \text{ blocks} + 16\text{ MB}$ files
+  - `double indirect blocks` --- same idea as multi-level page tables; points to a block that contains pointers to blocks that contain pointers to blocks that contain the contents of the file
+    - used for up to $12 \text{ blocks} + 16 + 16^2 \text{ MB}$ files
+  - `triple indirect blocks` --- ...
+    - used for up to $12 \text{ blocks} + 16 + 16^2 + 16^3 \text{ MB}$ files
+  - ~~`xth indirect blocks` --- **doesn't actually exist!**{.lr}~~
+    - ~~used for up to $12 \text{ blocks} + 16 + 16^2 + 16^3 + ... + 16^x \text{ MB}$ files~~
+- ![inodes](images/lec28/hinode.png)
+
+- ***Q:*** What is the maximum size of a file managed by the index block in the following scenario? {.lr}
+  - An index block stores 12 direct pointers, 1 single, double and triple indirect pointer each
+  - A disk block is 8 KiB in size
+  - A pointer to a block is 4 Bytes
+  - Indirect blocks consist of direct pointers only
+
+- ***A:***  {.lg}
+  - $\text{num of pointers per indirect table} = \frac{\text{block size}}{\text{pointer size}} =  \frac{2^{13}}{2^2} = 2^{11}$
+  - $\text{num of addressable blocks} = (\text{num of direct blocks}) + (\text{num of indirect blocks}) = (12) + 2^{11} + (2^{11})^2 + (2^{11})^3 \approx (2^{11})^3 = 2^{33}$
+    - can just approximate using the largest term (i.e. $(2^{11})^3$)
+  - $\text{total num of bytes} = \text{total num of blocks} \times \text{block size} = 2^{33} \times 2^{13} = 2^{46} = 64 \text{ TiB} < \text{max size of file}$
+
+### 28.1.1. Hard Links
+
+Hard link --- a directory entry (aka filename)
+- A hard link (e.g. `todo.txt`) points to an inode
+```mermaid
+graph LR
+  A["todo.txt"] --> B["inode 1"]
+```
+
+#### 28.1.1.1. Multiple Hard Links Can Point to the Same inode
+
+Deleting a file only removes a hard link (the file can be hard liked somewhere else)
+- POSIX has the `unlink` call rather than a delete call
+
+#### 28.1.1.2. Seeing inodes via `ls -i`
+
+```bash
+>>> nano -w todo.txt
+>>> hello
+>>> ls -il
+total 4
+1836659 -rw-r--r-- 1 user user 5 Nov 17 15:20 todo.txt
+```
+- `1836659` is the inode number
+- `1` is the number of hard links to the file
+- `user user` is the owner and group
+- `5` is the file size in bytes (i.e. num of characters)
+- `Nov 17 15:20` is the last modified date
+- `todo.txt` is the filename
+
+#### 28.1.1.3. Setting inodes via `ln`
+
+```bash
+# ... from above
+>>> ln todo.txt b.txt
+>>> ls -li
+total 8
+1836659 -rw-r--r-- 2 user user 5 Nov 17 15:20 b.txt
+1836659 -rw-r--r-- 2 user user 5 Nov 17 15:20 todo.txt
+#
+>>> ln todo.txt c.txt
+>>> ls -li
+total 12
+1836659 -rw-r--r-- 3 user user 5 Nov 17 15:20 b.txt
+1836659 -rw-r--r-- 3 user user 5 Nov 17 15:20 c.txt
+1836659 -rw-r--r-- 3 user user 5 Nov 17 15:20 todo.txt
+```
+```bash
+# all 3 files are the same file (bc they point to the same inode)
+# so changing one changes all of them (since inode is what actually contains file contents)
+
+>>> cat todo.txt
+hello
+>>> cat b.txt
+hello
+>>> cat c.txt
+hello
+```
+
+##### 28.1.1.3.1. inodes Persist After `mv`
+```bash
+>>> mv todo.txt d.txt # rename file
+>>> mv todo.txt somedir # move file to subdir
+# still points to same inode
+```
+
+##### 28.1.1.3.2. `rm` Just Removes a Hard Link
+
+`rm` just calls system call `unlink`, which removes a hard link to the inode
+- when there are no more hard links to the inode, the space taken up by the inode can be reused by the kernel
+- is how the Recycle Bin works
+
+### 28.1.2. Soft Links (Simlinks)
+
+Soft links are paths to another file:
+- When resolving the file, the file system is redirected somewhere else, so:
+  - Soft link targets do not need to exist
+  - Soft link targets can be deleted without notice of the soft link
+  - Unresolvable soft links lead to an exception
+- technically do take up an inode (but with just name as contents)
+
+```mermaid
+graph LR
+
+subgraph Z[" "]
+direction BT
+  B["b.txt"] --> A["todo.txt"]
+end
+
+subgraph ZA[" "]
+direction LR
+  A-->E["inode 1"]
+end
+```
+
+- filesystems are DAGs: directed acyclic graphs
+- soft links allow for cycles to exist bc the kernel doesn't care about their validity (wrt targets, deletion of their targets)
+
+#### 28.1.2.1. Setting Soft Links via `ln -s`
+
+```bash
+>>> ln -s todo.txt b.txt
+>>> ls -il
+total 4
+1836662 lrwxrwxrwx 1 user user 6 Nov 17 15:20 b.txt -> todo.txt # soft link has ALL permissions
+1836659 -rw-r--r-- 1 user user 5 Nov 17 15:20 todo.txt
+```
+
+##### 28.1.2.1.1. Renaming/Moving Soft Link Targets Breaks Soft Links
+
+```bash
+>>> mv todo.txt c.txt
+total 4
+1836662 lrwxrwxrwx 1 user user 6 Nov 17 15:20 b.txt -> todo.txt # BROKEN soft link
+1836659 -rw-r--r-- 1 user user 5 Nov 17 15:20 c.txt
+>>> cat b.txt
+cat: b.txt: No such file or directory
+```
+
+##### 28.1.2.1.2. Broken Soft Link Pointing To A Broken Soft Link
+
+```bash
+>>> ln -s b.txt todo.txt
+total 4
+1836662 lrwxrwxrwx 1 user user 6 Nov 17 15:20 b.txt -> todo.txt # BROKEN soft link
+1836659 -rw-r--r-- 1 user user 5 Nov 17 15:20 c.txt
+1836133 lrwxrwxrwx 1 user user 4 Nov 17 15:20 todo.txt -> b.txt # BROKEN soft link
+>>> cat todo.txt
+cat: todo.txt: Too many levels of symbolic links
+```
+- if we `strace` the `cat` command, we can see that it doesn't even execute, it immediately raises an error (i.e. is handled by the kernel)
+- other stuff
+  - `cp` uses a different inode (since it's a different file)
+  - `>>> stat FILENAME` is a system call that tells you lots of information about the file (including inode number, size, number of hard links, etc.)
+
+### 28.1.3. In UNIX, Everything is a File
+
+- Directories are files of type “directory”
+- Additional types are “regular file”, “block device” (HDDs, SSDs), “pipe”, “socket” etc.
+- Directory inodes do not store pointers to data blocks but rather filenames and pointers to inodes
+  - e.g. `.`, `..` have their own inodes too (file contents are all the contents of files and directories within them)
+    - the number of hard links to a directory is the number of subdirectories it has (including `.` and `..`); this shows up when you do `ls -l`
+
+### 28.1.4. What Data is Stored in an inode?
+
+| Data                        | Stored in inode? | Details                                        |
+| --------------------------- | ---------------- | ---------------------------------------------- |
+| Filename                    {.lr} | No {.lr}         | Names are stored in directories                |
+| Containing Directory name   {.lr} | No {.lr}         | File can be in multiple dirs                   |
+| File Size                   {.lg} | Yes {.lg}        |                                                |
+| File type                   {.lg} | Yes {.lg}        |                                                |
+| # of soft links to file     {.lr} | No {.lr}         | (they are unknown)                             |
+| location of soft links      {.lr} | No {.lr}         | (they are unknown)                             |
+| # of hard links to file     {.lg} | Yes {.lg}        | (to know when to erase the file, check `stat`) |
+| location of hard links      {.lr} | No {.lr}         | (they are unknown to the inode)                |
+| access rights               {.lg} | Yes {.lg}        |                                                |
+| timestamps                  {.lg} | Yes {.lg}        |                                                |
+| file contents               {.b} | Sometimes {.b}   |                                                |
+| ordered list of data blocks {.lg} | Yes {.lg}        | by def'n                                       |
+
+### 28.1.5. Filesystem Caches Speed Up Writing to Disks
+
+- Writes to disk are slow
+  - We can use a cache to speed it up
+- File blocks are cached in main memory in the **filesystem** cache
+  - TEMPORAL locality --- referenced blocks are likely to be referenced again
+  - SPATIAL locality --- referenced blocks are likely to be close to each other
+- A kernel thread (or daemon) writes changes periodically to disk
+- `flush` and `sync` system calls trigger a permanent write
+
+### 28.1.6. Journaling Filesystem (In Case of Crashes)
+
+Deleting a file on a Unix file system involves three steps:
+- Removing its directory entry
+- Releasing the inode to the pool of free inodes
+- Returning all disk blocks to the pool of free disk blocks
+
+Crashes could occur between any steps, leading to a storage leak
+- A journaling file system logs all changes to the file system before they are applied
+- The journal contains operations in progress, so if a crash occurs we can recover
+
+## 28.2. SUMMARY
+
+inodes are a hybrid allocation strategy
+- inodes are offer greater flexibility over: contiguous, linked, FAT, or indexed allocation
+- Everything is a file on UNIX, names in a directory can be hard or soft links
+
+## 28.3. PRACTICE
+
+- ***Q:*** What does the filesystem look like before and after the `mv` and `rm` commands? {.lr}
+  ```bash
+  touch todo.txt
+  ln todo.txt b.txt
+  ln -s todo.txt c.txt
+  mv todo.txt d.txt # 1
+  rm b.txt # 2
+  ```
+
+- ***A:***  {.lg}
+  1. `touch todo.txt` creates a file of size 0 with a new inode
+  2. `ln todo.txt b.txt` creates a hard link to the inode of `todo.txt`
+  3. `ln -s todo.txt c.txt` creates a soft link to the inode of `todo.txt`
+  4. before `mv`:
+
+       ```mermaid
+       graph LR;
+
+       A["c.txt"] --> B["todo.txt"]
+       B["todo.txt"] --> C["inode 1"]
+       D["b.txt"] --> C["inode 1"]
+       ```
+
+  5. after `mv` (soft link from `c.txt` is broken):
+
+       ```mermaid
+       graph LR;
+
+       A["c.txt"] --> B["todo.txt"]
+       D["b.txt"] --> C["inode 1"]
+       E["d.txt"] --> C["inode 1"]
+
+       style B fill:#ffff,color:#000000
+       ```
+
+  6. after `rm`:
+
+       ```mermaid
+       graph LR;
+
+       A["c.txt"] --> B["todo.txt"]
+       E["d.txt"] --> C["inode 1"]
+
+       style B fill:#ffff,color:#000000
+       ```
