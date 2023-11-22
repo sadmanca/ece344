@@ -420,6 +420,8 @@
   - [30.1. Clock Page Replacement Algorithm](#301-clock-page-replacement-algorithm)
     - [30.1.1. Example: Clock Page Replacement](#3011-example-clock-page-replacement)
       - [30.1.1.1. Clock Visualization](#30111-clock-visualization)
+      - [30.1.1.2. Clock Page Replacement](#30112-clock-page-replacement)
+  - [30.2. When to Disable Page Replacement/Swapping?](#302-when-to-disable-page-replacementswapping)
 
 
 <!--------------------------------{.gray}------------------------------>
@@ -7625,59 +7627,59 @@ classDiagram
     class BEFORE-START
 
     hand --> 0
-    hand -- 0-
-    hand -- -0-
-    hand -- -0
+    hand -- 0_
+    hand -- _0_
+    hand -- _0
 
     class hand {
     }
     class 0 {
       0
     }
-    class 0- {
+    class 0_ {
       0
    }
-   class -0- {
+   class _0_ {
       0
    }
-   class -0 {
+   class _0 {
       0
    }
 ```
 
 ```mermaid
 classDiagram
-    class -1-
+    class _1_
 
-    hand <-- 1
-    hand --> 0-
-    hand -- -0-
-    hand -- -0
+    hand -- 1
+    hand --> 0_
+    hand -- _0_
+    hand -- _0
 
     class hand {
     }
     class 1 {
       1
     }
-    class 0- {
+    class 0_ {
       0
    }
-   class -0- {
+   class _0_ {
       0
    }
-   class -0 {
+   class _0 {
       0
    }
 ```
 
 ```mermaid
 classDiagram
-    class -2-
+    class _2_
 
     hand -- 1
-    hand <-- 2
-    hand --> -0-
-    hand -- -0
+    hand -- 2
+    hand --> _0_
+    hand -- _0
 
     class hand {
     }
@@ -7687,22 +7689,22 @@ classDiagram
     class 2 {
       1
    }
-   class -0- {
+   class _0_ {
       0
    }
-   class -0 {
+   class _0 {
       0
    }
 ```
 
 ```mermaid
 classDiagram
-    class -3-
+    class _3_
 
     hand -- 1
     hand -- 2
-    hand <-- 3
-    hand --> -0
+    hand -- 3
+    hand --> _0
 
     class hand {
     }
@@ -7715,19 +7717,19 @@ classDiagram
    class 3 {
       1
    }
-   class -0 {
+   class _0 {
       0
    }
 ```
 
 ```mermaid
 classDiagram
-    class -4-
+    class _4_
 
     hand --> 1
     hand -- 2
     hand -- 3
-    hand <-- 4
+    hand -- 4
 
     class hand {
     }
@@ -7744,3 +7746,327 @@ classDiagram
       1
    }
 ```
+
+```mermaid
+classDiagram
+    class _5_
+
+    hand -- 1
+    hand --> 2
+    hand -- 3
+    hand -- 4
+
+    class hand {
+    }
+    class 1 {
+      0
+    }
+    class 2 {
+      1
+   }
+   class 3 {
+      1
+   }
+   class 4 {
+      1
+   }
+```
+
+```mermaid
+classDiagram
+    class _5_
+
+    hand -- 1
+    hand -- 2
+    hand --> 3
+    hand -- 4
+
+    class hand {
+    }
+    class 1 {
+      0
+    }
+    class 2 {
+      0
+   }
+   class 3 {
+      1
+   }
+   class 4 {
+      1
+   }
+```
+
+```mermaid
+classDiagram
+    class _5_
+
+    hand -- 1
+    hand -- 2
+    hand -- 3
+    hand --> 4
+
+    class hand {
+    }
+    class 1 {
+      0
+    }
+    class 2 {
+      0
+   }
+   class 3 {
+      0
+   }
+   class 4 {
+      1
+   }
+```
+
+```mermaid
+classDiagram
+    class _5_
+
+    hand --> 1
+    hand -- 2
+    hand -- 3
+    hand -- 4
+
+    class hand {
+    }
+    class 1 {
+      0
+    }
+    class 2 {
+      0
+   }
+   class 3 {
+      0
+   }
+   class 4 {
+      0
+   }
+```
+
+```mermaid
+classDiagram
+    class _5_
+
+    hand -- 1
+    hand --> 2
+    hand -- 3
+    hand -- 4
+
+    class hand {
+    }
+    class 1 {
+      1
+    }
+    class 2 {
+      0
+   }
+   class 3 {
+      0
+   }
+   class 4 {
+      0
+   }
+```
+
+```mermaid
+classDiagram
+    class _2_
+
+    hand -- 1
+    hand --> 2
+    hand -- 3
+    hand -- 4
+
+    class hand {
+    }
+    class 1 {
+      1
+    }
+    class 2 {
+      1
+   }
+   class 3 {
+      0
+   }
+   class 4 {
+      0
+   }
+```
+
+```mermaid
+classDiagram
+    class _3_
+
+    hand -- 1
+    hand --> 2
+    hand -- 3
+    hand -- 4
+
+    class hand {
+    }
+    class 1 {
+      1
+    }
+    class 2 {
+      1
+   }
+   class 3 {
+      1
+   }
+   class 4 {
+      0
+   }
+```
+
+```mermaid
+classDiagram
+    class _1_
+
+    hand -- 1
+    hand -- 2
+    hand --> 3
+    hand -- 4
+
+    class hand {
+    }
+    class 1 {
+      1
+    }
+    class 2 {
+      0
+   }
+   class 3 {
+      1
+   }
+   class 4 {
+      0
+   }
+```
+
+```mermaid
+classDiagram
+    class _1_
+
+    hand -- 1
+    hand -- 2
+    hand -- 3
+    hand --> 4
+
+    class hand {
+    }
+    class 1 {
+      1
+    }
+    class 2 {
+      0
+   }
+   class 3 {
+      0
+   }
+   class 4 {
+      0
+   }
+```
+
+```mermaid
+classDiagram
+    class _1_
+
+    hand --> 5
+    hand -- 2
+    hand -- 3
+    hand -- 1
+
+    class hand {
+    }
+    class 5 {
+      1
+    }
+    class 2 {
+      0
+   }
+   class 3 {
+      0
+   }
+   class 1 {
+      1
+   }
+```
+
+```mermaid
+classDiagram
+    class _2_
+
+    hand --> 5
+    hand -- 2
+    hand -- 3
+    hand -- 1
+
+    class hand {
+    }
+    class 5 {
+      1
+    }
+    class 2 {
+      1
+   }
+   class 3 {
+      0
+   }
+   class 1 {
+      1
+   }
+```
+
+```mermaid
+classDiagram
+    class _3_
+
+    hand --> 5
+    hand -- 2
+    hand -- 3
+    hand -- 1
+
+    class hand {
+    }
+    class 5 {
+      1
+    }
+    class 2 {
+      1
+   }
+   class 3 {
+      1
+   }
+   class 1 {
+      1
+   }
+```
+
+#### 30.1.1.2. Clock Page Replacement
+
+- Assume our physical memory can only hold 4 pages, and we access the following:
+  - 1 2 3 4 5 2 3 1 2 3 (all of the pages are initially on disk)
+
+| 1      | 2      | 3      | 4      | 5      | 2   | 3   | 1      | 2   | 3   |
+| ------ | ------ | ------ | ------ | ------ | --- | --- | ------ | --- | --- |
+| 1 {.r} | 1      | 1      | 1      | 5 {.r} | 5   | 5   | 5      | 5   | 5   |
+|        | 2 {.r} | 2      | 2      | 2      | 2   | 2   | 2      | 2   | 2   |
+|        |        | 3 {.r} | 3      | 3      | 3   | 3   | 3      | 3   | 3   |
+|        |        |        | 4 {.r} | 4      | 4   | 4   | 1 {.r} | 1   | 1   |
+
+**\_\_\_**{.r} indicates that a page fault occurred (i.e. page was replaced)
+
+$\text{total num of page faults} =$ **6**{.r}
+
+## 30.2. When to Disable Page Replacement/Swapping?
+
+- Memory is cheap, and has quite high capacity
+  - You’d rather know you need more memory than run slowly
+  - Linux runs an OOM (out of memory) killer, that SIGKILLs the memory hog
+- Larger page sizes allow for speedups (2 MiB or 1 GiB page size)
+  - Trade more fragmentation for more TLB coverage
