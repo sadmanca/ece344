@@ -422,6 +422,18 @@
       - [30.1.1.1. Clock Visualization](#30111-clock-visualization)
       - [30.1.1.2. Clock Page Replacement](#30112-clock-page-replacement)
   - [30.2. When to Disable Page Replacement/Swapping?](#302-when-to-disable-page-replacementswapping)
+- [31. Memory Allocation (2023-11-24)](#31-memory-allocation-2023-11-24)
+  - [31.1. Static Allocation is the Simplest Strategy](#311-static-allocation-is-the-simplest-strategy)
+  - [31.2. Dynamic Allocation is Often Required](#312-dynamic-allocation-is-often-required)
+  - [31.3. Stack Allocation is Mostly Done for You in C](#313-stack-allocation-is-mostly-done-for-you-in-c)
+  - [31.4. You've Used Dynamic Allocation Before](#314-youve-used-dynamic-allocation-before)
+    - [31.4.1. Fragmentation is a Unique Issue for Dynamic Allocation](#3141-fragmentation-is-a-unique-issue-for-dynamic-allocation)
+      - [31.4.1.1. Requirements for Fragmentation](#31411-requirements-for-fragmentation)
+    - [31.4.2. INTERNAL vs. EXTERNAL Fragmentation](#3142-internal-vs-external-fragmentation)
+    - [31.4.3. We Want to Minimize Fragmentation](#3143-we-want-to-minimize-fragmentation)
+    - [31.4.4. Allocator Implementations Usually Use a Free List](#3144-allocator-implementations-usually-use-a-free-list)
+    - [31.4.5. Heap Allocation Strategies](#3145-heap-allocation-strategies)
+    - [31.4.6. Allocating Using Best Fit (1)](#3146-allocating-using-best-fit-1)
 
 
 <!--------------------------------{.gray}------------------------------>
@@ -8070,3 +8082,117 @@ $\text{total num of page faults} =$ **6**{.r}
   - Linux runs an OOM (out of memory) killer, that SIGKILLs the memory hog
 - Larger page sizes allow for speedups (2 MiB or 1 GiB page size)
   - Trade more fragmentation for more TLB coverage
+
+
+
+
+
+
+
+
+
+
+
+<!--------------------------------{.gray}------------------------------>
+
+
+
+
+
+
+
+<hr style="border:30px solid #FFFF; margin: 100px 0 100px 0; {.gray}"> </hr>
+
+
+
+
+
+
+<!--------------------------------{.gray}------------------------------>
+<div style="page-break-after: always;"></div>
+
+# 31. Memory Allocation (2023-11-24)
+
+## 31.1. Static Allocation is the Simplest Strategy
+
+Create a fixed size allocation in your program via `char buffer[4096];`
+- When the program loads, the kernel sets aside that memory for you
+- That memory exists as long as your process does, no need to free
+
+## 31.2. Dynamic Allocation is Often Required
+
+You may only conditionally require memory
+- Static allocations are sometimes wasteful
+  - You may not know the size of the allocation
+  - Static allocations need to account for the maximum size
+- Where do you allocate memory?
+  - You can either allocate on the stack or on the heap
+
+## 31.3. Stack Allocation is Mostly Done for You in C
+
+Think of normal variables
+- The compiler internally inserts `alloca` calls
+  - e.g. `int *px = (int*) alloca(4);`
+- Whenever the function that called `alloca` returns, it frees all the memory
+  - This just restores the previous stack pointer
+  - This won't work if you try to use the memory after returning
+
+
+## 31.4. You've Used Dynamic Allocation Before
+
+These are the `malloc` family of functions
+- The most flexible way to use memory, but is also the most difficult to get right
+- You have to properly handle your memory lifetimes, and `free` exactly once
+
+### 31.4.1. Fragmentation is a Unique Issue for Dynamic Allocation
+
+- You allocate memory in different sized contiguous blocks
+  - Compaction is not possible and every allocation decision is permanent
+- A fragment is a small contiguous block of memory that cannot handle an allocation
+  - You can think of it as a *hole* in memory, wasting space
+
+#### 31.4.1.1. Requirements for Fragmentation
+
+- Different allocation lifetimes
+- Different allocation sizes
+- Inability to relocate previous allocations
+
+### 31.4.2. INTERNAL vs. EXTERNAL Fragmentation
+
+- External fragmentation occurs when you allocate different sized blocks
+  - img
+- Internal fragmentation occurs when you allocate fixed sized blocks
+  - Wasted space within a block
+  - img
+
+### 31.4.3. We Want to Minimize Fragmentation
+
+- Fragmentation is just wasted space, which we should prevent
+  - We want to reduce the number of *holes* between blocks of memory
+  - Our goal is to keep allocating memory without wasting space
+
+### 31.4.4. Allocator Implementations Usually Use a Free List
+
+- They keep track of free blocks of memory by chaining them together
+  - Implemented with a linked list
+- We need to be able to handle a request of any size
+- For allocation, we choose a block large enough for the request
+  - Remove it from the free list
+- For deallocation, we add the block back to the free list
+  - If it's adjacent to another free block, we can merge them
+
+### 31.4.5. Heap Allocation Strategies
+
+1. Best fit: choose the smallest block that can satisfy the request
+   - Needs to search through the whole list (unless there's an exact match)
+2. Worst fit: choose largest block (most leftover space)
+   - Also has to search through the list
+3. First fit: choose first block that can satisfy request
+
+### 31.4.6. Allocating Using Best Fit (1)
+
+- Note that blocks with a blank background and a number are free
+  - img
+- Where do we allocate this block?
+  - img
+  - ...
