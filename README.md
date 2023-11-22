@@ -400,6 +400,22 @@
     - [28.1.6. Journaling Filesystem (In Case of Crashes)](#2816-journaling-filesystem-in-case-of-crashes)
   - [28.2. SUMMARY](#282-summary)
   - [28.3. PRACTICE](#283-practice)
+- [29. Page Replacement (2023-11-21)](#29-page-replacement-2023-11-21)
+  - [29.1. Computer Memory Hierarchy is a Trade-off of Capacity and Speed](#291-computer-memory-hierarchy-is-a-trade-off-of-capacity-and-speed)
+    - [29.1.1. Why is Page Replacement Important?](#2911-why-is-page-replacement-important)
+    - [29.1.2. Demand Paging](#2912-demand-paging)
+      - [29.1.2.1. Working Set](#29121-working-set)
+  - [29.2. Page Replacement Algorithms](#292-page-replacement-algorithms)
+    - [29.2.1. Page Replacement Example to Consider](#2921-page-replacement-example-to-consider)
+    - [29.2.2. Example: Optimal Page Replacement (4 Page Frames)](#2922-example-optimal-page-replacement-4-page-frames)
+    - [29.2.3. Example: FIFO Page Replacement (4 Page Frames)](#2923-example-fifo-page-replacement-4-page-frames)
+    - [29.2.4. Example: FIFO Page Replacement (3 Page Frames)](#2924-example-fifo-page-replacement-3-page-frames)
+      - [29.2.4.1. Bélády’s Anomaly](#29241-béládys-anomaly)
+    - [29.2.5. Example: LRU Page Replacement (Use FIFO to Break Ties)](#2925-example-lru-page-replacement-use-fifo-to-break-ties)
+      - [29.2.5.1. Implementing LRU in HARDware](#29251-implementing-lru-in-hardware)
+      - [29.2.5.2. Implementing LRU in SOFTware](#29252-implementing-lru-in-software)
+    - [29.2.6. Practical Alternative for LRU](#2926-practical-alternative-for-lru)
+  - [29.3. SUMMARY](#293-summary)
 
 
 <!--------------------------------{.gray}------------------------------>
@@ -7374,3 +7390,180 @@ inodes are a hybrid allocation strategy
 
        style B fill:#ffff,color:#000000
        ```
+
+
+
+
+
+
+
+
+
+
+<!--------------------------------{.gray}------------------------------>
+
+
+
+
+
+
+
+<hr style="border:30px solid #FFFF; margin: 100px 0 100px 0; {.gray}"> </hr>
+
+
+
+
+
+
+<!--------------------------------{.gray}------------------------------>
+<div style="page-break-after: always;"></div>
+
+# 29. Page Replacement (2023-11-21)
+
+## 29.1. Computer Memory Hierarchy is a Trade-off of Capacity and Speed
+
+Each level wants to pretend it has the speed of the layer above it and the capacity of the layer below it.
+
+| Memory Type                 | Capacity | Speed (and price) |
+| --------------------------- | -------- | ----------------- |
+| Tape Drives                 | highest  | lowest            |
+| Hard Disk Drive (HDD)       | ↑        | ↓                 |
+| SATA Solid State Disk (SSD) | ↑        | ↓                 |
+| Non-Volatile Memory (NVMe)  | ↑        | ↓                 |
+| Memory (RAM)                | ↑        | ↓                 |
+| CPU Cache                   | ↑        | ↓                 |
+| CPU                         | lowest   | highest           |
+\* ↑ means direction of increase, ↓ means direction of decrease
+
+### 29.1.1. Why is Page Replacement Important?
+
+- PROBLEM: The memory used by all the processes my exceed the amount of physical memory available.
+  - Not all of them may be in use at the same time
+- SOLUTION: Only keep referenced pages in memory, put others on disk
+  - Swap pages back to memory when they’re needed (i.e. **replace pages**)
+
+### 29.1.2. Demand Paging
+
+- We use memory as a cache for the file system
+- Map memory pages to file system blocks
+  - Only load them into memory when they’re used through the page fault handler (i.e. **demand paging**; page fault occurred because the page was not in memory)
+- If the page doesn’t represent a file, we can map it to swap space
+  - Move it to disk if we need to use more physical memory
+
+#### 29.1.2.1. Working Set
+
+Working set --- the set/number of pages that are in use by a process given an amount of time
+- If you cannot fit your working set into physical memory your process will thrash
+  - pages are constantly moving in and out of cache
+
+## 29.2. Page Replacement Algorithms
+
+- Optimal --- replace the page that will be used furthest in the future (i.e. won't be used for the longest)
+- Random --- replace a random page
+- FIFO --- replace the page that was loaded into memory the longest time ago (i.e. replace oldest page)
+- Least Recently Used (LRU) --- replace the page that was used the longest time ago (i.e. that hasn’t been used in the longest time)
+
+### 29.2.1. Page Replacement Example to Consider
+
+- Assume our physical memory can only hold 4 pages, and we access the following:
+  - 1 2 3 4 1 2 5 1 2 3 4 5 (all of the pages are initially on disk)
+- We'll use this for a bunch of examples during this lecture
+  - For every example we'll find the number of page faults
+
+### 29.2.2. Example: Optimal Page Replacement (4 Page Frames)
+
+- Assume our physical memory can only hold 4 pages, and we access the following:
+  - 1 2 3 4 1 2 5 1 2 3 4 5 (all of the pages are initially on disk)
+
+| 1      | 2      | 3      | 4      | 1   | 2   | 5      | 1   | 2   | 3   | 4      | 5   |
+| ------ | ------ | ------ | ------ | --- | --- | ------ | --- | --- | --- | ------ | --- |
+| 1 {.r} | 1      | 1      | 1      | 1   | 1   | 1      | 1   | 1   | 1   | 4 {.r} | 4   |
+|        | 2 {.r} | 2      | 2      | 2   | 2   | 2      | 2   | 2   | 2   | 2      | 2   |
+|        |        | 3 {.r} | 3      | 3   | 3   | 3      | 3   | 3   | 3   | 3      | 3   |
+|        |        |        | 4 {.r} | 4   | 4   | 5 {.r} | 5   | 5   | 5   | 5      | 5   |
+
+**\_\_\_**{.r} indicates that a page fault occurred (i.e. page was replaced)
+
+$\text{total num of page faults} =$ **6**{.r}
+
+### 29.2.3. Example: FIFO Page Replacement (4 Page Frames)
+
+- Assume our physical memory can only hold 4 pages, and we access the following:
+  - 1 2 3 4 1 2 5 1 2 3 4 5 (all of the pages are initially on disk)
+
+| 1      | 2      | 3      | 4      | 1   | 2   | 5      | 1      | 2      | 3      | 4      | 5             |
+| ------ | ------ | ------ | ------ | --- | --- | ------ | ------ | ------ | ------ | ------ | ------------- |
+| 1 {.r} | 1      | 1      | 1      | 1   | 1   | 5 {.r} | 1      | 1      | 1      | 4 {.r} | 4             |
+|        | 2 {.r} | 2      | 2      | 2   | 2   | 2      | 1 {.r} | 1      | 1      | 1      | **\_5\_**{.r} |
+|        |        | 3 {.r} | 3      | 3   | 3   | 3      | 3      | 2 {.r} | 2      | 2      | 2             |
+|        |        |        | 4 {.r} | 4   | 4   | 4      | 4      | 4      | 3 {.r} | 3      | 3             |
+
+**\_\_\_**{.r} indicates that a page fault occurred (i.e. page was replaced)
+
+$\text{total num of page faults} =$ **10**{.r}
+
+### 29.2.4. Example: FIFO Page Replacement (3 Page Frames)
+
+- Assume our physical memory can only hold **3 pages**, and we access the following:
+  - 1 2 3 4 1 2 5 1 2 3 4 5 (all of the pages are initially on disk)
+
+| 1      | 2      | 3      | 4      | 1      | 2      | 5      | 1   | 2   | 3      | 4      | 5   |
+| ------ | ------ | ------ | ------ | ------ | ------ | ------ | --- | --- | ------ | ------ | --- |
+| 1 {.r} | 1      | 1      | 4 {.r} | 4      | 4      | 5 {.r} | 5   | 5   | 5      | 5      | 5   |
+|        | 2 {.r} | 2      | 2      | 1 {.r} | 1      | 1      | 1   | 1   | 3 {.r} | 3      | 3   |
+|        |        | 3 {.r} | 3      | 3      | 2 {.r} | 2      | 2   | 2   | 2      | 4 {.r} | 4   |
+
+**\_\_\_**{.r} indicates that a page fault occurred (i.e. page was replaced)
+
+$\text{total num of page faults} =$ **9**{.r}
+
+#### 29.2.4.1. Bélády’s Anomaly
+
+- More page frames (with FIFO algorithm) ==> causes more faults
+  - Does not exist with LRU or “stack-based algorithms”
+- For other algorithms: increasing number of page frames ==> decreases number of page faults
+
+### 29.2.5. Example: LRU Page Replacement (Use FIFO to Break Ties)
+
+- Assume our physical memory can only hold 4 pages, and we access the following:
+  - 1 2 3 4 1 2 5 1 2 3 4 5 (all of the pages are initially on disk)
+
+| 1      | 2      | 3      | 4      | 1   | 2   | 5      | 1   | 2   | 3      | 4       | 5             |
+| ------ | ------ | ------ | ------ | --- | --- | ------ | --- | --- | ------ | ------- | ------------- |
+| 1 {.r} | 1      | 1      | 1      | 1   | 1   | 1      | 1   | 1   | 1      | 1       | **\_5\_**{.r} |
+|        | 2 {.r} | 2      | 2      | 2   | 2   | 2      | 2   | 2   | 2      | 2       | 2             |
+|        |        | 3 {.r} | 3      | 3   | 3   | 5 {.r} | 5   | 5   | 5      | 4  {.r} | 4             |
+|        |        |        | 4 {.r} | 4   | 4   | 4      | 4   | 4   | 3 {.r} | 3       | 3             |
+
+**\_\_\_**{.r} indicates that a page fault occurred (i.e. page was replaced)
+
+$\text{total num of page faults} =$ **8**{.r}
+
+#### 29.2.5.1. Implementing LRU in HARDware
+
+- Implementing LRU in hardware has to search all pages
+  - e.g. by keeping a counter for each page
+  - For each page reference, save the system clock into the counter
+  - For replacement, scan through the pages and find the one with the oldest clock
+
+#### 29.2.5.2. Implementing LRU in SOFTware
+- Create a doubly linked list of pages
+  - For each page reference, move it to the front of the list
+  - For replacement, remove from the back of the list
+- It requires 6 pointer updates for each page reference
+  - also creates a high contention bottleneck for multiple processors
+
+### 29.2.6. Practical Alternative for LRU
+
+- Implementing LRU in practice isn’t going to work
+  - We settle for approximate LRU (LRU is an approximation of the optimal case anyways)
+- We’ll be looking at the clock algorithm, but there’s also:
+  - Least Frequently Used (LFU), 2Q, Adaptive Replacement Cache (ARC)
+
+## 29.3. SUMMARY
+
+- Page replacement algorithms aim to reduce page faults
+ - Optimal (good for comparison but not realistic)
+ - Random (actually works surprisingly well, avoids the worst case)
+ - FIFO (easy to implement but Bélády's anomaly)
+ - LRU (gets close to optimal but expensive to implement)
