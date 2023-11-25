@@ -425,15 +425,19 @@
 - [31. Memory Allocation (2023-11-24)](#31-memory-allocation-2023-11-24)
   - [31.1. Static Allocation is the Simplest Strategy](#311-static-allocation-is-the-simplest-strategy)
   - [31.2. Dynamic Allocation is Often Required](#312-dynamic-allocation-is-often-required)
-  - [31.3. Stack Allocation is Mostly Done for You in C](#313-stack-allocation-is-mostly-done-for-you-in-c)
-  - [31.4. You've Used Dynamic Allocation Before](#314-youve-used-dynamic-allocation-before)
+  - [31.3. Stack Allocation is Mostly Done for You in C (via `alloca`)](#313-stack-allocation-is-mostly-done-for-you-in-c-via-alloca)
+  - [31.4. Dynamic Allocation is Normally Done via `malloc`](#314-dynamic-allocation-is-normally-done-via-malloc)
     - [31.4.1. Fragmentation is a Unique Issue for Dynamic Allocation](#3141-fragmentation-is-a-unique-issue-for-dynamic-allocation)
       - [31.4.1.1. Requirements for Fragmentation](#31411-requirements-for-fragmentation)
     - [31.4.2. INTERNAL vs. EXTERNAL Fragmentation](#3142-internal-vs-external-fragmentation)
     - [31.4.3. We Want to Minimize Fragmentation](#3143-we-want-to-minimize-fragmentation)
     - [31.4.4. Allocator Implementations Usually Use a Free List](#3144-allocator-implementations-usually-use-a-free-list)
     - [31.4.5. Heap Allocation Strategies](#3145-heap-allocation-strategies)
-    - [31.4.6. Allocating Using Best Fit (1)](#3146-allocating-using-best-fit-1)
+      - [31.4.5.1. PRACTICE: Allocating Using BEST Fit](#31451-practice-allocating-using-best-fit)
+      - [31.4.5.2. PRACTICE: Allocating Using WORST Fit](#31452-practice-allocating-using-worst-fit)
+      - [31.4.5.3. PRACTICE: Allocating Using WORST Fit](#31453-practice-allocating-using-worst-fit)
+    - [31.4.6. Heap Allocation Is Slow](#3146-heap-allocation-is-slow)
+  - [31.5. SUMMARY](#315-summary)
 
 
 <!--------------------------------{.gray}------------------------------>
@@ -8115,30 +8119,33 @@ $\text{total num of page faults} =$ **6**{.r}
 
 ## 31.1. Static Allocation is the Simplest Strategy
 
-Create a fixed size allocation in your program via `char buffer[4096];`
+Create a fixed size allocation in your program --  e.g. `char buffer[4096];`
 - When the program loads, the kernel sets aside that memory for you
 - That memory exists as long as your process does, no need to free
+  - i.e. basically just global variables
 
 ## 31.2. Dynamic Allocation is Often Required
 
-You may only conditionally require memory
-- Static allocations are sometimes wasteful
-  - You may not know the size of the allocation
+- You may only conditionally require memory
+  - Static allocations are sometimes wasteful
+- You may not know the size of the allocation
   - Static allocations need to account for the maximum size
 - Where do you allocate memory?
-  - You can either allocate on the stack or on the heap
+  - on the stack, or
+  - on the heap
 
-## 31.3. Stack Allocation is Mostly Done for You in C
+## 31.3. Stack Allocation is Mostly Done for You in C (via `alloca`)
 
-Think of normal variables
+- Think of normal variables
+  - e.g. `int x`
 - The compiler internally inserts `alloca` calls
   - e.g. `int *px = (int*) alloca(4);`
-- Whenever the function that called `alloca` returns, it frees all the memory
-  - This just restores the previous stack pointer
-  - This won't work if you try to use the memory after returning
+- Whenever the function that called `alloca` returns, it frees all the memory (no `free` required (or even possible))
+  - This just restores the previous stack pointer (so all that memory can be reused)
+- This won't work if you try to use the memory after returning
 
 
-## 31.4. You've Used Dynamic Allocation Before
+## 31.4. Dynamic Allocation is Normally Done via `malloc`
 
 These are the `malloc` family of functions
 - The most flexible way to use memory, but is also the most difficult to get right
@@ -8160,10 +8167,11 @@ These are the `malloc` family of functions
 ### 31.4.2. INTERNAL vs. EXTERNAL Fragmentation
 
 - External fragmentation occurs when you allocate different sized blocks
-  - img
+  - No room for allocation between blocks
 - Internal fragmentation occurs when you allocate fixed sized blocks
   - Wasted space within a block
-  - img
+
+![INTERNAL vs. EXTERNAL Fragmentation](images/lec31/2023-11-24_20-32-32.png)
 
 ### 31.4.3. We Want to Minimize Fragmentation
 
@@ -8183,16 +8191,109 @@ These are the `malloc` family of functions
 
 ### 31.4.5. Heap Allocation Strategies
 
-1. Best fit: choose the smallest block that can satisfy the request
+1. **BEST fit:** choose the smallest block that can satisfy the request
    - Needs to search through the whole list (unless there's an exact match)
-2. Worst fit: choose largest block (most leftover space)
+2. **WORST fit:** choose largest block (most leftover space)
    - Also has to search through the list
-3. First fit: choose first block that can satisfy request
+3. **FIRST fit:** choose first block that can satisfy request
 
-### 31.4.6. Allocating Using Best Fit (1)
+#### 31.4.5.1. PRACTICE: Allocating Using BEST Fit
 
-- Note that blocks with a blank background and a number are free
-  - img
-- Where do we allocate this block?
-  - img
-  - ...
+Given the following blocks of memory, allocate the following requests using best fit:
+- uncoloured blocks with a number are free, coloured blocks are allocated
+
+***Q: a)*** Where can we allocate a block of **40**{.g} given the below? {.lr}
+
+| FULL {.r} | 100 | FULL {.b} | 60  |
+| --------- | --- | --------- | --- |
+
+- ***A:*** {.lg}
+  - look for the smallest available block that is large enough --> will fit in block of 60 (with 20 remaining):
+
+| FULL {.r} | 100 | FULL {.b} | 40 {.g} | 20  |
+| --------- | --- | --------- | ------- | --- |
+
+---
+
+***Q: b)*** Where can we allocate a block of **60**{.p}? {.lr}
+
+- ***A:*** {.lg}
+  - 20 block is too small
+  - need to fit in 100 block (with 40 remaining)
+
+| FULL {.r} | 60 {.p} | 40  | FULL {.b} | 40 {.g} | 20  |
+| --------- | ------- | --- | --------- | ------- | --- |
+
+---
+
+***Q: c)*** Where can we allocate *another* block of **60**{.lr}? {.lr}
+
+- ***A:*** {.lg}
+  - next block doesn't fit anywhere
+  - cannot allocate!
+
+| FULL {.r} | 60 {.p} | 40  | FULL {.b} | 40 {.g} | 20  |
+| --------- | ------- | --- | --------- | ------- | --- |
+
+#### 31.4.5.2. PRACTICE: Allocating Using WORST Fit
+
+***Q: a)*** Where can we allocate a block of **40**{.g} {.lr}
+
+| FULL {.r} | 100 | FULL {.b} | 60  |
+| --------- | --- | --------- | --- |
+
+- ***A:*** {.lg}
+  - choose largest block
+  - fit in 100 (with 60 remaining)
+
+| FULL {.r} | 40 {.g} | 60  | FULL {.b} | 60  |
+| --------- | ------- | --- | --------- | --- |
+
+---
+
+***Q: b)*** Where can we allocate a block of **60**{.p} {.lr}
+
+- ***A:*** {.lg}
+  - fit in either 60 block
+
+| FULL {.r} | 40 {.g} | 60 {.p} | FULL {.b} | 60  |
+| --------- | ------- | ------- | --------- | --- |
+
+---
+
+***Q: c)*** Where can we allocate *another* block of **60**{.lr}? {.lr}
+
+- ***A:*** {.lg}
+  - fits exactly in remainig 60 block space
+  - **shows that worst fit can use space better than best fit in some scenarios!**
+
+| FULL {.r} | 40 {.g} | 60 {.p} | FULL {.b} | 60 {.lr} |
+| --------- | ------- | ------- | --------- | -------- |
+
+#### 31.4.5.3. PRACTICE: Allocating Using WORST Fit
+
+- same as previous examples, except we choose the first block that is large enough
+
+### 31.4.6. Heap Allocation Is Slow
+
+**Where each heap allocation strategy is lacking:**
+
+1. **BEST fit:** tends to leave very large holes and very small holes
+   - Small holes may be useless (e.g. few bytes)
+2. **WORST fit:** simulation says it’s the worst in terms of storage utilization
+3. **FIRST fit:** tends to leave “average” size holes {.lg}
+
+## 31.5. SUMMARY
+
+User space memory allocation:  (**concepts of which are the same for ; the kernel just gives them more contiguous virtual memory pages**)
+- There’s static and dynamic allocations
+- For dynamic allocations, fragmentation is a big concern
+- Dynamic allocation returns blocks of memory
+  - Fragmentation between blocks is external
+  - Fragmentation within a blocks is internal
+- 3 general allocation strategies for different sized allocations
+  - Best fit
+  - Worst fit
+  - First fit
+- **Kernel has to implement it’s own kernel space memory allocators**
+  - **Uses similar concepts as for user space memory allocation** (which can get by the kernel just giving user space more contiguous virtual memory pages)
