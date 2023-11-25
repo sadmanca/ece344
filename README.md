@@ -438,6 +438,17 @@
       - [31.4.5.3. PRACTICE: Allocating Using WORST Fit](#31453-practice-allocating-using-worst-fit)
     - [31.4.6. Heap Allocation Is Slow](#3146-heap-allocation-is-slow)
   - [31.5. SUMMARY](#315-summary)
+- [32. Buddy and Slab Allocators (2023-11-28)](#32-buddy-and-slab-allocators-2023-11-28)
+  - [32.1. Buddy Allocator](#321-buddy-allocator)
+    - [32.1.1. Implementing a Buddy Allocator](#3211-implementing-a-buddy-allocator)
+      - [32.1.1.1. Allocation](#32111-allocation)
+      - [32.1.1.2. Deallocation](#32112-deallocation)
+    - [32.1.2. Example: Using The Buddy Allocator](#3212-example-using-the-buddy-allocator)
+    - [32.1.3. PROS vs. CONS of Buddy Allocators](#3213-pros-vs-cons-of-buddy-allocators)
+  - [32.2. Slab Allocator](#322-slab-allocator)
+    - [32.2.1. Implementing a Slab Allocator](#3221-implementing-a-slab-allocator)
+  - [32.3. Using Slab Allocators With Buddy Allocators](#323-using-slab-allocators-with-buddy-allocators)
+  - [32.4. SUMMARY](#324-summary)
 
 
 <!--------------------------------{.gray}------------------------------>
@@ -8297,3 +8308,123 @@ User space memory allocation:  (**concepts of which are the same for ; the kerne
   - First fit
 - **Kernel has to implement it’s own kernel space memory allocators**
   - **Uses similar concepts as for user space memory allocation** (which can get by the kernel just giving user space more contiguous virtual memory pages)
+
+
+
+
+
+
+
+
+
+
+
+<!--------------------------------{.gray}------------------------------>
+
+
+
+
+
+
+
+<hr style="border:30px solid #FFFF; margin: 100px 0 100px 0; {.gray}"> </hr>
+
+
+
+
+
+
+<!--------------------------------{.gray}------------------------------>
+<div style="page-break-after: always;"></div>
+
+# 32. Buddy and Slab Allocators (2023-11-28)
+
+## 32.1. Buddy Allocator
+
+- Restricts memory allocation requests to powers of two (i.e. of size $2^n$)
+  - e.g. 2, 4, 8, 16, 32, ..., 4096, ...
+- Enables greater efficiency in memory management
+  - e.g. if a 16-byte block is requested, the allocator can allocate a 32-byte block and split it into two 16-byte blocks
+  - splits blocks into 2 until the smallest block size that can satisfy the request is available
+  - enables fast searching and merging (of adjacent free *buddy* blocks)
+
+### 32.1.1. Implementing a Buddy Allocator
+
+#### 32.1.1.1. Allocation
+
+- restrict memory allocation requests to be $2^k$, where $0 <= k <= N$ (round up if needed)
+- use $N + 1$ free lists of blocks for each size, where $N$ is the maximum block size
+  - each free list contains blocks of size $2^k$, where $k$ is the index of the free list
+  - e.g. free list 0 contains blocks of size 1, free list 1 contains blocks of size 2, free list 2 contains blocks of size 4, etc.
+- for a request of size $2^k$, search the the free list from smallest to largest until a block of size $2^k$ is found
+  - i.e. search $k, k+1, k+2, ..., N$ until a large enough block is found
+  - then, insert "buddy" blocks into free lists
+
+#### 32.1.1.2. Deallocation
+
+- merge adjacent free "buddy" blocks of the same size together
+  - e.g. if a 16-byte block is freed, check if the adjacent 16-byte "buddy" block is free
+  - if so, merge the two blocks into a 32-byte block and insert it into the free list for 32-byte blocks
+- recursively merge blocks so that the largest free block is always available
+
+### 32.1.2. Example: Using The Buddy Allocator
+
+Consider the following sequence of memory allocation requests given the below memory layout:
+
+![initial](images/lec32/2023-11-24_22-19-14.png)
+
+***Q: a)*** where do we allocate a request of size 28? {.lr}
+- ***A:*** a size 32 buddy block is free (while the other is occupied), so we can allocate the size 28 request in there (with internal fragmentation of size 4) {.lg}
+  - 28 rounded up to the next power of 2 is 32
+
+***Q: b)*** where do we allocate **another** request of size 28? {.lr}
+- ***A:*** no free size 32 blocks, so need to split a size 64 block into two buddy blocks of size 32 and allocate the memory request to one of them {.lg}
+
+***Q: c)*** what happens if we free the blue-colored size 64 block? {.lr}
+> ***A:*** since its buddy block is also free, we can merge the two buddy blocks together into a single free size 128 block {.lg}
+
+![final](images/lec32/2023-11-24_22-19-16.png)
+
+### 32.1.3. PROS vs. CONS of Buddy Allocators
+
+- PROS {.lg}
+  - Fast and simple compared to general dynamic memory allocation
+  - Avoids external fragmentation by keeping free physical pages contiguous
+- CONS {.lr}
+  - There's always internal fragmentation
+  - We always round up the allocation size if it's not a power of 2
+
+## 32.2. Slab Allocator
+
+Slab allocators take advantage of fixed size allocations:
+- Allocate objects of same size from a dedicated pool
+  - All structures of the same type are the same size
+- Every object type has it's own pool with blocks of the correct size
+  - This prevents internal fragmentation
+  - Makes allocation and deallocation fast and easier (one slot is as good as any)
+
+### 32.2.1. Implementing a Slab Allocator
+
+Slab is like a cache of "slots"
+- Each allocation size has a corresponding slab of slots (one slot holds one allocation)
+- Instead of a linked list, we can use a bitmap (there's a mapping between bit and slot)
+  - For allocations, we set the bit and return the slot
+  - For deallocations, we just clear the bit
+  - Free slabs can be identified by a bitmap with the bit set to 0
+
+## 32.3. Using Slab Allocators With Buddy Allocators
+
+Each slab can be allocated using the buddy allocator:
+- Consider two object sizes: A and B
+- ![slabs](images/lec32/2023-11-24_22-36-21.png)
+  - Slabs A1, A2, ... are allocated using the buddy allocator
+    - Slabs A1, A2 use different (smaller sized) objects than Slabs B1, B2 (so they're allocated using different free lists)
+  - Within each slab, we use a bitmap to track which slots are allocated
+- We can reduce internal fragmentation if Slabs are located adjacently
+  - In this example A has internal fragmentation (dark box)
+
+## 32.4. SUMMARY
+
+The kernel restricts the problem for better memory allocation implementations
+- Buddy allocator is a real-world restricted implementation
+- Slab allocator takes advantage of fixed sized objects to reduce fragmentation
